@@ -1,0 +1,6 @@
+This is a placeholder for the interface image.
+
+To add an actual image:
+1. Take a screenshot of the application running
+2. Save it as "interface.png" in this directory
+3. The image will be automatically displayed in the README.md file 
