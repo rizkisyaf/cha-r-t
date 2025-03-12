@@ -64,3 +64,6 @@ ENV/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Large data file
+backend/app/services/futures_orderbook_data.csv
