@@ -32,8 +32,8 @@ import {
   FaCaretDown,
   FaInfoCircle
 } from 'react-icons/fa';
-import IndicatorsModal from './indicators';
-import ActiveIndicators from './indicators/ActiveIndicators';
+import { IndicatorsModal, IndicatorSettings, ActiveIndicators } from './indicators';
+import { getIndicator } from './indicators/types';
 
 const ChartContainerWrapper = styled.div`
   flex: 1;
@@ -263,174 +263,6 @@ const ChartCanvas = styled.div`
   z-index: 1;
 `;
 
-// Define available indicators
-const AVAILABLE_INDICATORS = {
-  SMA: {
-    name: 'Simple Moving Average',
-    calculate: (data, period = 20) => {
-      const smaData = [];
-      for (let i = 0; i < data.length; i++) {
-        if (i >= period - 1) {
-          let sum = 0;
-          for (let j = 0; j < period; j++) {
-            sum += data[i - j].close;
-          }
-          smaData.push({
-            time: data[i].time,
-            value: sum / period,
-          });
-        }
-      }
-      return smaData;
-    }
-  },
-  EMA: {
-    name: 'Exponential Moving Average',
-    calculate: (data, period = 20) => {
-      const emaData = [];
-      const multiplier = 2 / (period + 1);
-      let ema = data[0].close;
-      
-      for (let i = 0; i < data.length; i++) {
-        ema = (data[i].close - ema) * multiplier + ema;
-        emaData.push({
-          time: data[i].time,
-          value: ema
-        });
-      }
-      return emaData;
-    }
-  },
-  RSI: {
-    name: 'Relative Strength Index',
-    calculate: (data, period = 14) => {
-      const rsiData = [];
-      let gains = 0;
-      let losses = 0;
-      
-      // First pass: calculate initial averages
-      for (let i = 1; i <= period; i++) {
-        const change = data[i].close - data[i - 1].close;
-        if (change >= 0) {
-          gains += change;
-        } else {
-          losses -= change;
-        }
-      }
-      
-      // Calculate first RSI
-      let avgGain = gains / period;
-      let avgLoss = losses / period;
-      let rs = avgGain / avgLoss;
-      let rsi = 100 - (100 / (1 + rs));
-      
-      rsiData.push({
-        time: data[period].time,
-        value: rsi
-      });
-      
-      // Calculate rest of RSI values
-      for (let i = period + 1; i < data.length; i++) {
-        const change = data[i].close - data[i - 1].close;
-        let currentGain = 0;
-        let currentLoss = 0;
-        
-        if (change >= 0) {
-          currentGain = change;
-        } else {
-          currentLoss = -change;
-        }
-        
-        avgGain = ((avgGain * (period - 1)) + currentGain) / period;
-        avgLoss = ((avgLoss * (period - 1)) + currentLoss) / period;
-        
-        rs = avgGain / avgLoss;
-        rsi = 100 - (100 / (1 + rs));
-        
-        rsiData.push({
-          time: data[i].time,
-          value: rsi
-        });
-      }
-      
-      return rsiData;
-    }
-  },
-  BB: {
-    name: 'Bollinger Bands',
-    calculate: (data, period = 20, stdDev = 2) => {
-      const bbData = [];
-      
-      for (let i = period - 1; i < data.length; i++) {
-        let sum = 0;
-        let sumSquares = 0;
-        
-        // Calculate SMA and standard deviation
-        for (let j = 0; j < period; j++) {
-          const price = data[i - j].close;
-          sum += price;
-          sumSquares += price * price;
-        }
-        
-        const sma = sum / period;
-        const variance = (sumSquares - (sum * sum / period)) / period;
-        const standardDeviation = Math.sqrt(variance);
-        
-        bbData.push({
-          time: data[i].time,
-          middle: sma,
-          upper: sma + (standardDeviation * stdDev),
-          lower: sma - (standardDeviation * stdDev)
-        });
-      }
-      
-      return bbData;
-    }
-  },
-  MACD: {
-    name: 'MACD',
-    calculate: (data, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) => {
-      const macdData = [];
-      const fastEMA = [];
-      const slowEMA = [];
-      
-      // Calculate fast EMA
-      let ema = data[0].close;
-      const fastMultiplier = 2 / (fastPeriod + 1);
-      for (let i = 0; i < data.length; i++) {
-        ema = (data[i].close - ema) * fastMultiplier + ema;
-        fastEMA.push(ema);
-      }
-      
-      // Calculate slow EMA
-      ema = data[0].close;
-      const slowMultiplier = 2 / (slowPeriod + 1);
-      for (let i = 0; i < data.length; i++) {
-        ema = (data[i].close - ema) * slowMultiplier + ema;
-        slowEMA.push(ema);
-        
-        // Calculate MACD line
-        const macd = fastEMA[i] - ema;
-        macdData.push({
-          time: data[i].time,
-          macd: macd
-        });
-      }
-      
-      // Calculate signal line (EMA of MACD)
-      let signalEMA = macdData[0].macd;
-      const signalMultiplier = 2 / (signalPeriod + 1);
-      for (let i = 0; i < macdData.length; i++) {
-        signalEMA = (macdData[i].macd - signalEMA) * signalMultiplier + signalEMA;
-        macdData[i].signal = signalEMA;
-        macdData[i].histogram = macdData[i].macd - signalEMA;
-      }
-      
-      return macdData;
-    }
-  }
-};
-
 const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] }, onTimeframeChange, onIndicatorAdd }) => {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
@@ -444,6 +276,9 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
   const [isIndicatorsMenuOpen, setIsIndicatorsMenuOpen] = useState(false);
   const chartTypeRef = useRef(null);
   const indicatorsRef = useRef(null);
+  const [isIndicatorSettingsOpen, setIsIndicatorSettingsOpen] = useState(false);
+  const [currentIndicator, setCurrentIndicator] = useState(null);
+  const [crosshairData, setCrosshairData] = useState(null);
   
   // Mock OHLCV data - in a real app, this would come from props
   const [ohlcvData, setOhlcvData] = useState({
@@ -627,6 +462,131 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
         resizeObserverRef.current = new ResizeObserver(handleResize);
         resizeObserverRef.current.observe(chartContainerRef.current);
         
+        // Subscribe to crosshair move
+        chart.subscribeCrosshairMove((param) => {
+          try {
+            if (param && param.time) {
+              // Find the data point at the crosshair position
+              const dataPoint = data.find(d => d.time === param.time);
+              if (dataPoint) {
+                // Get indicator values at this point
+                const indicatorValues = {};
+                
+                // For each indicator in the context, find the value at the current time
+                context.indicators.forEach((indicator, index) => {
+                  try {
+                    const indicatorModule = getIndicator(indicator.type);
+                    if (!indicatorModule) return;
+                    
+                    // Calculate the indicator data directly - this ensures we always have the latest data
+                    const calculatedData = indicatorModule.calculate(data, indicator);
+                    
+                    // Find the data point at the current time
+                    const indicatorDataPoint = calculatedData.find(d => d.time === param.time);
+                    
+                    if (indicatorDataPoint) {
+                      // Special handling for SMA indicator
+                      if (indicator.type === 'SMA') {
+                        // For SMA, the value might be directly in the data point or in a 'value' property
+                        if (typeof indicatorDataPoint === 'number') {
+                          indicatorValues[indicator.type] = indicatorDataPoint;
+                          console.log(`Found direct SMA value at time ${param.time}: ${indicatorDataPoint}`);
+                        } else if (indicatorDataPoint.value !== undefined) {
+                          indicatorValues[indicator.type] = indicatorDataPoint.value;
+                          console.log(`Found SMA value property at time ${param.time}: ${indicatorDataPoint.value}`);
+                        } else if (indicatorDataPoint.close !== undefined) {
+                          indicatorValues[indicator.type] = indicatorDataPoint.close;
+                          console.log(`Found SMA close property at time ${param.time}: ${indicatorDataPoint.close}`);
+                        } else {
+                          // Try to find any numeric property
+                          console.log('SMA data point structure:', indicatorDataPoint);
+                          const keys = Object.keys(indicatorDataPoint);
+                          for (const key of keys) {
+                            if (key !== 'time' && typeof indicatorDataPoint[key] === 'number') {
+                              indicatorValues[indicator.type] = indicatorDataPoint[key];
+                              console.log(`Found SMA numeric property ${key} at time ${param.time}: ${indicatorDataPoint[key]}`);
+                              break;
+                            }
+                          }
+                        }
+                      }
+                      // Store the value based on indicator type
+                      else if (indicator.type === 'BB') {
+                        indicatorValues[indicator.type] = {
+                          middle: indicatorDataPoint.middle,
+                          upper: indicatorDataPoint.upper,
+                          lower: indicatorDataPoint.lower
+                        };
+                        console.log(`Found BB values at time ${param.time}: middle=${indicatorDataPoint.middle}`);
+                      } 
+                      else if (indicator.type === 'MACD') {
+                        indicatorValues[indicator.type] = {
+                          macd: indicatorDataPoint.macd,
+                          signal: indicatorDataPoint.signal,
+                          histogram: indicatorDataPoint.histogram
+                        };
+                        console.log(`Found MACD values at time ${param.time}: macd=${indicatorDataPoint.macd}`);
+                      }
+                      else if (indicatorDataPoint.value !== undefined) {
+                        // For simple indicators like EMA, RSI
+                        indicatorValues[indicator.type] = indicatorDataPoint.value;
+                        console.log(`Found value for ${indicator.type} at time ${param.time}: ${indicatorDataPoint.value}`);
+                      }
+                      else {
+                        // Fallback for any other format
+                        console.log(`Found data for ${indicator.type} but in unexpected format:`, indicatorDataPoint);
+                        // Try to extract a value if possible
+                        const firstValueKey = Object.keys(indicatorDataPoint).find(key => 
+                          key !== 'time' && typeof indicatorDataPoint[key] === 'number'
+                        );
+                        if (firstValueKey) {
+                          indicatorValues[indicator.type] = indicatorDataPoint[firstValueKey];
+                          console.log(`Using ${firstValueKey} as value: ${indicatorValues[indicator.type]}`);
+                        }
+                      }
+                    } else {
+                      console.log(`No data found for ${indicator.type} at time ${param.time}`);
+                    }
+                  } catch (err) {
+                    console.error(`Error processing indicator ${indicator.type}:`, err);
+                  }
+                });
+                
+                console.log('Crosshair data:', { time: param.time, indicatorValues });
+                
+                // Update crosshair data
+                setCrosshairData({
+                  time: param.time,
+                  point: dataPoint,
+                  indicatorValues
+                });
+              }
+            } else {
+              setCrosshairData(null);
+            }
+          } catch (error) {
+            console.error('Error in crosshair move handler:', error);
+          }
+        });
+        
+        // Add a mouse move handler to the chart container
+        chartContainerRef.current.addEventListener('mousemove', (e) => {
+          // This will force the chart to update the crosshair
+          if (chartRef.current) {
+            const rect = chartContainerRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Get the time at the current mouse position
+            const timeScale = chartRef.current.timeScale();
+            const logical = timeScale.coordinateToLogical(x);
+            if (logical !== null) {
+              // This will trigger the crosshair move event
+              chartRef.current.setCrosshairPosition(x, y, 0);
+            }
+          }
+        });
+        
         // Clean up on unmount
         return () => {
           if (resizeObserverRef.current) {
@@ -649,6 +609,9 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
       console.log('Updating chart with data:', data.length, 'candles');
       
       try {
+        // Make data available globally for the ActiveIndicators component
+        window.chartData = data;
+        
         // Update candlestick data
         candlestickSeriesRef.current.setData(data);
         
@@ -678,11 +641,17 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
   useEffect(() => {
     if (chartRef.current && data && data.length > 0 && context.indicators) {
       try {
+        console.log('Updating indicators:', context.indicators);
+        
         // Remove old indicators
         indicatorSeriesRef.current.forEach(series => {
           if (Array.isArray(series.series)) {
-            series.series.forEach(s => chartRef.current.removeSeries(s));
-          } else if (series.series) {
+            series.series.forEach(s => {
+              if (s && chartRef.current) {
+                chartRef.current.removeSeries(s);
+              }
+            });
+          } else if (series.series && chartRef.current) {
             chartRef.current.removeSeries(series.series);
           }
         });
@@ -690,132 +659,174 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
         // Clear indicator references
         indicatorSeriesRef.current = [];
         
+        // Store calculated indicator values for crosshair
+        const calculatedIndicatorValues = {};
+        
         // Add new indicators
         context.indicators.forEach((indicator, index) => {
-          const indicatorDef = AVAILABLE_INDICATORS[indicator.type];
-          if (!indicatorDef) return;
+          // Get the indicator module
+          const indicatorModule = getIndicator(indicator.type);
+          if (!indicatorModule) {
+            console.error(`Indicator module not found for type: ${indicator.type}`);
+            return;
+          }
           
           const isVisible = indicator.isVisible !== false;
           
+          // Calculate indicator data
+          const indicatorData = indicatorModule.calculate(data, indicator);
+          console.log(`Calculated ${indicator.type} data:`, indicatorData.length, 'points');
+          
+          // Store the last value for immediate display
+          if (indicatorData.length > 0) {
+            const lastPoint = indicatorData[indicatorData.length - 1];
+            
+            // Extract the value based on indicator type
+            if (indicator.type === 'SMA') {
+              calculatedIndicatorValues[indicator.type] = lastPoint.value;
+              console.log(`Stored last SMA value: ${lastPoint.value}`);
+            } else if (indicator.type === 'BB') {
+              calculatedIndicatorValues[indicator.type] = {
+                middle: lastPoint.middle,
+                upper: lastPoint.upper,
+                lower: lastPoint.lower
+              };
+            } else if (indicator.type === 'MACD') {
+              calculatedIndicatorValues[indicator.type] = {
+                macd: lastPoint.macd,
+                signal: lastPoint.signal,
+                histogram: lastPoint.histogram
+              };
+            } else if (lastPoint.value !== undefined) {
+              calculatedIndicatorValues[indicator.type] = lastPoint.value;
+            }
+          }
+          
+          // Get series options
+          const seriesOptions = indicatorModule.getSeriesOptions(indicator);
+          console.log(`Series options for ${indicator.type}:`, seriesOptions);
+          
+          // Handle different indicator types
           switch (indicator.type) {
             case 'BB': {
-              const bbData = indicatorDef.calculate(data, indicator.period, indicator.stdDev);
-              
-              const middle = chartRef.current.addLineSeries({
-                color: '#2962FF',
-                lineWidth: 1,
-                priceLineVisible: false,
+              // Bollinger Bands have three lines
+              const middle = chartRef.current.addSeries(LineSeries, {
+                ...seriesOptions.middle,
                 visible: isVisible,
               });
               
-              const upper = chartRef.current.addLineSeries({
-                color: '#26A69A',
-                lineWidth: 1,
-                priceLineVisible: false,
+              const upper = chartRef.current.addSeries(LineSeries, {
+                ...seriesOptions.upper,
                 visible: isVisible,
               });
               
-              const lower = chartRef.current.addLineSeries({
-                color: '#EF5350',
-                lineWidth: 1,
-                priceLineVisible: false,
+              const lower = chartRef.current.addSeries(LineSeries, {
+                ...seriesOptions.lower,
                 visible: isVisible,
               });
               
-              middle.setData(bbData.map(d => ({ time: d.time, value: d.middle })));
-              upper.setData(bbData.map(d => ({ time: d.time, value: d.upper })));
-              lower.setData(bbData.map(d => ({ time: d.time, value: d.lower })));
+              // Make sure data has the correct format for the chart
+              const middleData = indicatorData.map(d => ({ time: d.time, value: d.middle }));
+              const upperData = indicatorData.map(d => ({ time: d.time, value: d.upper }));
+              const lowerData = indicatorData.map(d => ({ time: d.time, value: d.lower }));
+              
+              console.log(`Setting BB data: middle=${middleData.length}, upper=${upperData.length}, lower=${lowerData.length} points`);
+              
+              middle.setData(middleData);
+              upper.setData(upperData);
+              lower.setData(lowerData);
               
               indicatorSeriesRef.current[index] = {
-                type: 'BB',
-                period: indicator.period,
+                type: indicator.type,
                 series: [middle, upper, lower]
               };
               break;
             }
             case 'MACD': {
-              const macdData = indicatorDef.calculate(
-                data, 
-                indicator.fastPeriod, 
-                indicator.slowPeriod, 
-                indicator.signalPeriod
-              );
-              
-              const macdLine = chartRef.current.addLineSeries({
-                color: '#2962FF',
-                lineWidth: 2,
-                priceLineVisible: false,
+              // MACD has two lines and a histogram
+              const macdLine = chartRef.current.addSeries(LineSeries, {
+                ...seriesOptions.macdLine,
                 visible: isVisible,
-                priceScaleId: 'macd',
-                scaleMargins: {
-                  top: 0.8,
-                  bottom: 0,
-                },
               });
               
-              const signalLine = chartRef.current.addLineSeries({
-                color: '#FF6B6B',
-                lineWidth: 2,
-                priceLineVisible: false,
+              const signalLine = chartRef.current.addSeries(LineSeries, {
+                ...seriesOptions.signalLine,
                 visible: isVisible,
-                priceScaleId: 'macd',
-                scaleMargins: {
-                  top: 0.8,
-                  bottom: 0,
-                },
               });
               
-              const histogram = chartRef.current.addHistogramSeries({
-                color: '#26A69A',
-                priceFormat: { type: 'volume' },
+              const histogram = chartRef.current.addSeries(HistogramSeries, {
+                ...seriesOptions.histogram,
                 visible: isVisible,
-                priceScaleId: 'macd',
-                scaleMargins: {
-                  top: 0.8,
-                  bottom: 0,
-                },
               });
               
-              macdLine.setData(macdData.map(d => ({ time: d.time, value: d.macd })));
-              signalLine.setData(macdData.map(d => ({ time: d.time, value: d.signal })));
-              histogram.setData(macdData.map(d => ({
+              // Make sure data has the correct format for the chart
+              const macdData = indicatorData.map(d => ({ time: d.time, value: d.macd }));
+              const signalData = indicatorData.map(d => ({ time: d.time, value: d.signal }));
+              const histogramData = indicatorData.map(d => ({
                 time: d.time,
                 value: d.histogram,
-                color: d.histogram >= 0 ? '#26A69A' : '#EF5350'
-              })));
+                color: d.histogram >= 0 ? 
+                  indicator.histogramPositiveColor || seriesOptions.histogram.color : 
+                  indicator.histogramNegativeColor || '#EF5350'
+              }));
+              
+              console.log(`Setting MACD data: macd=${macdData.length}, signal=${signalData.length}, histogram=${histogramData.length} points`);
+              
+              macdLine.setData(macdData);
+              signalLine.setData(signalData);
+              histogram.setData(histogramData);
               
               indicatorSeriesRef.current[index] = {
-                type: 'MACD',
+                type: indicator.type,
                 series: [macdLine, signalLine, histogram]
               };
               break;
             }
             default: {
-              const series = chartRef.current.addLineSeries({
-                color: indicator.type === 'RSI' ? '#FF6B6B' : '#2962FF',
-                lineWidth: 2,
-                priceLineVisible: false,
+              // Default case for simple line indicators (SMA, EMA, RSI)
+              const series = chartRef.current.addSeries(LineSeries, {
+                ...seriesOptions,
                 visible: isVisible,
-                ...(indicator.type === 'RSI' && {
-                  priceScaleId: 'rsi',
+                // For RSI, use a separate price scale
+                priceScaleId: indicator.type === 'RSI' ? 'rsi' : 'right',
+                // For RSI, set scale margins to display at the bottom
+                ...(indicator.type === 'RSI' ? {
                   scaleMargins: {
                     top: 0.8,
-                    bottom: 0,
+                    bottom: 0.1,
                   },
-                }),
+                } : {})
               });
               
-              const indicatorData = indicatorDef.calculate(data, indicator.period);
-              series.setData(indicatorData);
+              console.log(`Setting ${indicator.type} data: ${indicatorData.length} points`);
+              
+              // Make sure the data is in the correct format
+              if (indicatorData.length > 0) {
+                // Check if the data is already in the correct format
+                const formattedData = indicatorData[0].hasOwnProperty('value') 
+                  ? indicatorData 
+                  : indicatorData.map(d => ({ time: d.time, value: d.close || d }));
+                
+                series.setData(formattedData);
+              }
               
               indicatorSeriesRef.current[index] = {
                 type: indicator.type,
-                period: indicator.period,
                 series
               };
             }
           }
         });
+        
+        // Set initial crosshair data with calculated values
+        setCrosshairData({
+          time: data[data.length - 1].time,
+          point: data[data.length - 1],
+          indicatorValues: calculatedIndicatorValues
+        });
+        
+        // Fit content to view
+        chartRef.current.timeScale().fitContent();
       } catch (error) {
         console.error('Error updating indicators:', error);
       }
@@ -828,8 +839,12 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
       const indicatorToRemove = indicatorSeriesRef.current[index];
       if (indicatorToRemove) {
         if (Array.isArray(indicatorToRemove.series)) {
-          indicatorToRemove.series.forEach(s => chartRef.current.removeSeries(s));
-        } else if (indicatorToRemove.series) {
+          indicatorToRemove.series.forEach(s => {
+            if (s && chartRef.current) {
+              chartRef.current.removeSeries(s);
+            }
+          });
+        } else if (indicatorToRemove.series && chartRef.current) {
           chartRef.current.removeSeries(indicatorToRemove.series);
         }
       }
@@ -873,8 +888,31 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
   };
 
   const handleOpenIndicatorSettings = (index, indicator) => {
-    // TODO: Implement settings modal
+    // Show the indicator settings modal
     console.log('Open settings for indicator:', indicator);
+    
+    // Set state to show the settings modal
+    setIsIndicatorSettingsOpen(true);
+    setCurrentIndicator({ index, ...indicator });
+  };
+
+  const handleSaveIndicatorSettings = (index, updatedIndicator) => {
+    if (context.indicators && onIndicatorAdd) {
+      const newIndicators = [...context.indicators];
+      
+      // Remove the index property which was added for the settings component
+      const { index: _, originalIndex: __, uniqueId: ___, ...cleanIndicator } = updatedIndicator;
+      
+      // Update the indicator
+      newIndicators[index] = cleanIndicator;
+      
+      // Update the state
+      onIndicatorAdd(newIndicators);
+      
+      // Close the settings modal
+      setIsIndicatorSettingsOpen(false);
+      setCurrentIndicator(null);
+    }
   };
 
   return (
@@ -1101,17 +1139,25 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
           onRemoveIndicator={handleRemoveIndicator}
           onToggleVisibility={handleToggleIndicatorVisibility}
           onOpenSettings={handleOpenIndicatorSettings}
+          crosshairData={crosshairData}
         />
       </ChartArea>
       
+      {/* Indicator Settings Modal */}
+      <IndicatorSettings
+        isOpen={isIndicatorSettingsOpen}
+        indicator={currentIndicator}
+        onClose={() => setIsIndicatorSettingsOpen(false)}
+        onSave={handleSaveIndicatorSettings}
+        onRemove={handleRemoveIndicator}
+      />
+      
+      {/* Indicators Modal */}
       <IndicatorsModal
         isOpen={isIndicatorsMenuOpen}
         onClose={() => setIsIndicatorsMenuOpen(false)}
         onAddIndicator={(indicator) => {
-          if (onIndicatorAdd) {
-            const newIndicators = [...(context.indicators || []), indicator];
-            onIndicatorAdd(newIndicators);
-          }
+          onIndicatorAdd(indicator);
           setIsIndicatorsMenuOpen(false);
         }}
       />

@@ -280,10 +280,21 @@ function AppContent() {
   };
 
   const handleIndicatorAdd = (indicator) => {
-    setChartContext(prev => ({
-      ...prev,
-      indicators: [...(prev.indicators || []), indicator]
-    }));
+    // If indicator is an array, it's a complete replacement of the indicators
+    // This happens when toggling visibility or removing indicators
+    if (Array.isArray(indicator)) {
+      setChartContext(prev => ({
+        ...prev,
+        indicators: indicator
+      }));
+    } else {
+      // If it's a single indicator, add it to the array
+      // This happens when adding a new indicator
+      setChartContext(prev => ({
+        ...prev,
+        indicators: [...(prev.indicators || []), indicator]
+      }));
+    }
   };
 
   const handleStrategyAction = (action) => {
