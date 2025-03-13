@@ -42,6 +42,8 @@ const ChartContainerWrapper = styled.div`
   background-color: var(--primary-color);
   border-bottom: 1px solid var(--border-color);
   overflow: hidden;
+  width: 100%;
+  transition: width 0.3s ease;
 `;
 
 const ChartHeader = styled.div`
@@ -202,8 +204,9 @@ const ChartTypeMenuItem = styled.div`
   }
   
   &.active {
-    background-color: rgba(41, 98, 255, 0.1);
     color: var(--accent-color);
+    border-left: 2px solid var(--accent-color);
+    padding-left: 10px;
   }
 `;
 
@@ -234,7 +237,7 @@ const ChartTools = styled.div`
     
     &.active {
       color: var(--accent-color);
-      background-color: rgba(41, 98, 255, 0.1);
+      border-bottom: 2px solid var(--accent-color);
     }
   }
 `;

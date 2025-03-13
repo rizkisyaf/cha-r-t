@@ -38,7 +38,8 @@ The frontend is built with React and organized as follows:
 - `Header.js`: Application header with logo, symbol info, and actions
 - `Sidebar.js`: Navigation sidebar with chart type options
 - `ChartContainer.js`: Container for the financial chart using TradingView's lightweight charts
-- `ChatPanel.js`: Chat interface for interacting with the AI assistant
+- `AIAssistantPanel.js`: Right-side panel for AI assistant interaction
+- `BottomPanel.js`: Bottom panel for code editor, strategy builder, and other tools
 
 ### Key Services
 
@@ -182,14 +183,13 @@ python -m unittest discover tests
 Create tests using React Testing Library:
 
 ```javascript
-// src/components/__tests__/ChatPanel.test.js
+// src/components/__tests__/AIAssistantPanel.test.js
 import { render, screen, fireEvent } from '@testing-library/react';
-import ChatPanel from '../ChatPanel';
+import AIAssistantPanel from '../AIAssistantPanel';
 
-test('renders chat panel', () => {
-  render(<ChatPanel messages={[]} onSendMessage={() => {}} />);
-  const titleElement = screen.getByText(/AI Assistant/i);
-  expect(titleElement).toBeInTheDocument();
+test('renders AI assistant panel', () => {
+  render(<AIAssistantPanel messages={[]} onSendMessage={() => {}} />);
+  expect(screen.getByText('AI Assistant')).toBeInTheDocument();
 });
 ```
 

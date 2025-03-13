@@ -4,7 +4,8 @@ import styled from 'styled-components';
 import Header from './components/Header';
 import Sidebar, { VIEWS } from './components/sidebar';
 import ChartContainer from './components/ChartContainer';
-import ChatPanel from './components/ChatPanel';
+import AIAssistantPanel from './components/AIAssistantPanel';
+import BottomPanel from './components/BottomPanel';
 import { getFinancialData } from './services/api';
 import { initSocket, sendChatMessage, disconnectSocket } from './services/socket';
 
@@ -31,6 +32,7 @@ const ContentArea = styled.div`
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+  position: relative;
 `;
 
 // Map view IDs to routes
@@ -78,6 +80,8 @@ function AppContent() {
     context: {},
     analysisResults: null
   });
+
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(300);
 
   // Initialize socket connection
   useEffect(() => {
@@ -762,6 +766,10 @@ function AppContent() {
     }
   };
 
+  const handleBottomPanelResize = (height) => {
+    setBottomPanelHeight(height);
+  };
+
   return (
     <AppContainer>
       <Header 
@@ -790,19 +798,22 @@ function AppContent() {
                   context={chartContext}
                   onIndicatorAdd={handleIndicatorAdd}
                 />
-                <ChatPanel
-                  messages={chatMessages}
-                  onSendMessage={handleSendMessage}
-                  connected={socketConnected}
+                <BottomPanel
                   strategyState={strategyState}
                   onStrategyAction={handleStrategyAction}
-                  isAiTyping={isAiTyping}
-                  agentMemory={agentMemory}
+                  onResize={handleBottomPanelResize}
                 />
               </>
             } />
           </Routes>
         </ContentArea>
+        <AIAssistantPanel
+          messages={chatMessages}
+          onSendMessage={handleSendMessage}
+          connected={socketConnected}
+          isAiTyping={isAiTyping}
+          agentMemory={agentMemory}
+        />
       </MainContent>
     </AppContainer>
   );
