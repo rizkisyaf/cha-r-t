@@ -17,7 +17,11 @@ import {
   FaChartBar,
   FaForward,
   FaChartPie,
-  FaCode
+  FaCode,
+  FaSearch,
+  FaLightbulb,
+  FaDrawPolygon,
+  FaCog
 } from 'react-icons/fa';
 
 // Import strategy components
@@ -113,41 +117,69 @@ const ChatMessages = styled.div`
 
 const Message = styled.div`
   display: flex;
-  flex-direction: column;
-  max-width: ${props => props.$maximized === 'true' ? '90%' : '80%'};
+  margin-bottom: 12px;
+  justify-content: ${props => props.type === 'system' ? 'center' : 'flex-start'};
   
   ${props => props.type === 'user' && `
-    align-self: flex-end;
-  `}
-  
-  ${props => props.type === 'ai' && `
-    align-self: flex-start;
-    width: 100%;
+    justify-content: flex-end;
   `}
   
   ${props => props.type === 'system' && `
-    align-self: center;
-    max-width: 90%;
+    max-width: 120px;
+    margin-left: auto;
+    margin-right: auto;
   `}
 `;
 
 const MessageContent = styled.div`
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: ${props => props.type === 'system' ? '6px 10px' : '12px 16px'};
+  border-radius: 12px;
+  max-width: 80%;
+  font-size: ${props => props.type === 'system' ? '12px' : '14px'};
   line-height: 1.5;
   
   ${props => props.type === 'user' && `
     background-color: var(--accent-color);
     color: white;
-    border-bottom-right-radius: 0;
+    border-top-right-radius: 4px;
+    align-self: flex-end;
+  `}
+  
+  ${props => props.type === 'ai' && `
+    background-color: var(--message-bg);
+    color: var(--text-primary);
+    border-top-left-radius: 4px;
   `}
   
   ${props => props.type === 'system' && `
-    background-color: rgba(41, 98, 255, 0.1);
-    color: var(--text-color);
-    border: 1px solid rgba(41, 98, 255, 0.2);
+    background-color: var(--system-message-bg);
+    color: var(--text-secondary);
+    font-style: italic;
+    text-align: center;
   `}
+  
+  p {
+    margin: 0;
+  }
+  
+  code {
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+  }
+  
+  pre {
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+    
+    code {
+      background-color: transparent;
+      padding: 0;
+    }
+  }
 `;
 
 const AIMessageContent = styled.div`
@@ -212,6 +244,46 @@ const AIMessageContent = styled.div`
   }
 `;
 
+const TypingIndicator = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    margin-right: 4px;
+    opacity: 0.6;
+    animation: pulse 1.4s infinite ease-in-out;
+  }
+  
+  .dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+  
+  .dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  
+  .dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+  
+  @keyframes pulse {
+    0%, 60%, 100% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    30% {
+      transform: scale(1.5);
+      opacity: 1;
+    }
+  }
+`;
+
 const ChatInputContainer = styled.div`
   display: flex;
   align-items: center;
@@ -225,12 +297,15 @@ const ChatInputContainer = styled.div`
 
 const ChatInput = styled.input`
   flex: 1;
-  background-color: var(--secondary-color);
   border: none;
-  border-radius: 4px;
-  padding: 10px 16px;
-  color: var(--text-color);
-  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  padding: 0 12px;
+  
+  &:focus {
+    outline: none;
+  }
   
   &::placeholder {
     color: var(--text-secondary);
@@ -312,25 +387,143 @@ const TABS = {
   PERFORMANCE: 'PERFORMANCE'
 };
 
+const ActionButton = styled.button`
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  margin-top: 8px;
+  margin-right: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: var(--accent-hover);
+  }
+  
+  svg {
+    margin-right: 6px;
+    font-size: 14px;
+  }
+`;
+
+const ActionButtonGroup = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 8px;
+`;
+
+// Add a loading spinner component
+const LoadingSpinner = styled.div`
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 2px solid var(--accent-color);
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+// Add a Quick Action Bar component for common AI commands
+const QuickActionBar = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-color);
+  overflow-x: auto;
+  gap: 8px;
+  
+  &::-webkit-scrollbar {
+    height: 2px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 1px;
+  }
+  
+  ${props => props.$minimized === 'true' && `
+    display: none;
+  `}
+`;
+
+const QuickActionButton = styled.button`
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--secondary-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: var(--accent-color);
+    color: white;
+  }
+  
+  svg {
+    margin-right: 6px;
+    font-size: 12px;
+  }
+`;
+
+// Add a memory indicator to show the AI is remembering context
+const MemoryIndicator = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgba(41, 98, 255, 0.1);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--accent-color);
+  margin-top: 4px;
+  
+  svg {
+    margin-right: 4px;
+    font-size: 10px;
+  }
+`;
+
 const ChatPanel = ({ 
   messages, 
   onSendMessage, 
   connected = false,
   strategyState,
-  onStrategyAction
+  onStrategyAction,
+  isAiTyping = false,
+  agentMemory = {} // Add agent memory prop
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [minimized, setMinimized] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const [activeTab, setActiveTab] = useState(TABS.CHAT);
-  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
   
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change or when AI starts/stops typing
   useEffect(() => {
-    if (messagesEndRef.current && !minimized) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (inputRef.current && !minimized) {
+      inputRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, minimized]);
+  }, [messages, minimized, isAiTyping]);
   
   const handleSendMessage = () => {
     if (inputValue.trim()) {
@@ -353,18 +546,79 @@ const ChatPanel = ({
     }
   };
   
+  // Execute a predefined action
+  const executeAction = (action) => {
+    // This would trigger the AI to perform a specific action
+    onSendMessage(`@execute ${action}`);
+  };
+  
+  // Quick action handlers
+  const handleQuickAction = (action) => {
+    onSendMessage(action);
+  };
+  
   // Render message content based on type
   const renderMessageContent = (message) => {
+    // Get the message content from either text or content property
+    const messageText = message.text || message.content || '';
+    
     if (message.type === 'ai') {
+      // Extract action buttons if present in the message
+      const hasActionButtons = messageText.includes('[Action:');
+      let textContent = messageText;
+      let actionButtons = [];
+      
+      if (hasActionButtons) {
+        // Extract action buttons using regex
+        const actionRegex = /\[Action:(.*?)\]/g;
+        let match;
+        
+        while ((match = actionRegex.exec(messageText)) !== null) {
+          actionButtons.push(match[1].trim());
+        }
+        
+        // Remove action buttons from text
+        textContent = messageText.replace(actionRegex, '');
+      }
+      
       return (
-        <AIMessageContent>
-          <ReactMarkdown>{message.text}</ReactMarkdown>
-        </AIMessageContent>
+        <>
+          <AIMessageContent>
+            <ReactMarkdown>{textContent}</ReactMarkdown>
+          </AIMessageContent>
+          
+          {actionButtons.length > 0 && (
+            <ActionButtonGroup>
+              {actionButtons.map((action, index) => (
+                <ActionButton key={index} onClick={() => executeAction(action)}>
+                  <FaPlay /> {action}
+                </ActionButton>
+              ))}
+            </ActionButtonGroup>
+          )}
+          
+          {/* Show memory indicator if the AI has context */}
+          {agentMemory && agentMemory.analysisResults && (
+            <MemoryIndicator>
+              <FaRegLightbulb /> AI remembers your chart analysis from {new Date(agentMemory.analysisResults.timestamp).toLocaleTimeString()}
+            </MemoryIndicator>
+          )}
+        </>
+      );
+    } else if (message.type === 'system') {
+      // Add loading spinner for executing commands
+      const isExecuting = messageText.toLowerCase().includes('working');
+      
+      return (
+        <MessageContent type={message.type}>
+          {isExecuting && <LoadingSpinner />}
+          {messageText}
+        </MessageContent>
       );
     } else {
       return (
         <MessageContent type={message.type}>
-          {message.text}
+          {messageText}
         </MessageContent>
       );
     }
@@ -381,24 +635,63 @@ const ChatPanel = ({
                   {renderMessageContent(message)}
                 </Message>
               ))}
-              <div ref={messagesEndRef} />
+              
+              {/* Show typing indicator when AI is processing */}
+              {isAiTyping && (
+                <Message type="ai" $maximized={maximized.toString()}>
+                  <TypingIndicator>
+                    <div className="dot"></div>
+                    <div className="dot"></div>
+                    <div className="dot"></div>
+                  </TypingIndicator>
+                </Message>
+              )}
+              
+              <div ref={inputRef} />
             </ChatMessages>
+            
+            {/* Quick Action Bar for common commands */}
+            <QuickActionBar $minimized={minimized.toString()}>
+              <QuickActionButton onClick={() => handleQuickAction("add SMA 20")}>
+                <FaChartLine /> SMA 20
+              </QuickActionButton>
+              <QuickActionButton onClick={() => handleQuickAction("add EMA 12")}>
+                <FaChartLine /> EMA 12
+              </QuickActionButton>
+              <QuickActionButton onClick={() => handleQuickAction("add RSI")}>
+                <FaChartBar /> RSI
+              </QuickActionButton>
+              <QuickActionButton onClick={() => handleQuickAction("analyze chart")}>
+                <FaSearch /> Analyze
+              </QuickActionButton>
+              <QuickActionButton onClick={() => handleQuickAction("find trading opportunity")}>
+                <FaLightbulb /> Find Opportunity
+              </QuickActionButton>
+              <QuickActionButton onClick={() => handleQuickAction("detect patterns")}>
+                <FaDrawPolygon /> Patterns
+              </QuickActionButton>
+              <QuickActionButton onClick={() => handleQuickAction("create strategy")}>
+                <FaCog /> Create Strategy
+              </QuickActionButton>
+            </QuickActionBar>
             
             <ChatInputContainer $minimized={minimized.toString()}>
               <ChatInput
                 type="text"
-                placeholder="Ask anything about the chart..."
+                placeholder="Command the AI (e.g., 'add SMA 10')"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
+                ref={inputRef}
+                disabled={isAiTyping}
               />
-              <InputButton title="Voice input">
+              <InputButton title="Voice input" disabled={isAiTyping}>
                 <FaMicrophone />
               </InputButton>
               <InputButton 
                 title="Send message" 
                 onClick={handleSendMessage}
-                disabled={!inputValue.trim()}
+                disabled={!inputValue.trim() || isAiTyping}
               >
                 <FaPaperPlane />
               </InputButton>

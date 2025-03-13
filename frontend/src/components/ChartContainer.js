@@ -70,6 +70,7 @@ const OHLCVContainer = styled.div`
   padding: 4px 8px;
   flex-wrap: wrap;
   gap: 8px;
+  position: relative;
 `;
 
 const OHLCVItem = styled.div`
@@ -89,6 +90,14 @@ const OHLCVValue = styled.div`
   font-size: 12px;
   color: var(--text-color);
   font-weight: 500;
+`;
+
+const CandleTime = styled.div`
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
 `;
 
 const ChangeValue = styled.div`
@@ -280,7 +289,7 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
   const [currentIndicator, setCurrentIndicator] = useState(null);
   const [crosshairData, setCrosshairData] = useState(null);
   
-  // Mock OHLCV data - in a real app, this would come from props
+  // OHLCV data state
   const [ohlcvData, setOhlcvData] = useState({
     open: 0,
     high: 0,
@@ -292,27 +301,68 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
     positive: true
   });
   
-  // Update OHLCV data when chart data changes
+  // Update OHLCV data when crosshair data changes or when chart data changes
   useEffect(() => {
     if (data && data.length > 0) {
-      const latestCandle = data[data.length - 1];
-      const previousCandle = data.length > 1 ? data[data.length - 2] : null;
-      
-      const change = previousCandle ? latestCandle.close - previousCandle.close : 0;
-      const changePercent = previousCandle ? (change / previousCandle.close) * 100 : 0;
-      
-      setOhlcvData({
-        open: latestCandle.open,
-        high: latestCandle.high,
-        low: latestCandle.low,
-        close: latestCandle.close,
-        volume: latestCandle.volume,
-        change,
-        changePercent,
-        positive: change >= 0
-      });
+      // If we have crosshair data, use that
+      if (crosshairData && crosshairData.point) {
+        const currentCandle = crosshairData.point;
+        const previousCandle = findPreviousCandle(data, currentCandle.time);
+        
+        const change = previousCandle ? currentCandle.close - previousCandle.close : 0;
+        const changePercent = previousCandle ? (change / previousCandle.close) * 100 : 0;
+        
+        setOhlcvData({
+          open: currentCandle.open,
+          high: currentCandle.high,
+          low: currentCandle.low,
+          close: currentCandle.close,
+          volume: currentCandle.volume,
+          change,
+          changePercent,
+          positive: change >= 0
+        });
+        
+        console.log('Updated OHLCV data from crosshair:', currentCandle);
+      } 
+      // Otherwise use the latest candle
+      else {
+        const latestCandle = data[data.length - 1];
+        const previousCandle = data.length > 1 ? data[data.length - 2] : null;
+        
+        const change = previousCandle ? latestCandle.close - previousCandle.close : 0;
+        const changePercent = previousCandle ? (change / previousCandle.close) * 100 : 0;
+        
+        setOhlcvData({
+          open: latestCandle.open,
+          high: latestCandle.high,
+          low: latestCandle.low,
+          close: latestCandle.close,
+          volume: latestCandle.volume,
+          change,
+          changePercent,
+          positive: change >= 0
+        });
+        
+        console.log('Updated OHLCV data from latest candle:', latestCandle);
+      }
     }
-  }, [data]);
+  }, [crosshairData, data]);
+  
+  // Helper function to find the previous candle
+  const findPreviousCandle = (data, currentTime) => {
+    if (!data || data.length <= 1) return null;
+    
+    // Find the index of the current candle
+    const currentIndex = data.findIndex(candle => candle.time === currentTime);
+    
+    // If we found the current candle and it's not the first one, return the previous candle
+    if (currentIndex > 0) {
+      return data[currentIndex - 1];
+    }
+    
+    return null;
+  };
   
   // Close menus when clicking outside
   useEffect(() => {
@@ -352,6 +402,26 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
     return num.toLocaleString(undefined, {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
+    });
+  };
+
+  // Format timestamp to readable date/time
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '';
+    
+    // Check if timestamp is a Unix timestamp (number) or a string
+    const date = typeof timestamp === 'number' 
+      ? new Date(timestamp * 1000) // Unix timestamp (seconds)
+      : new Date(timestamp);       // ISO string or other format
+    
+    // Format the date
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
     });
   };
   
@@ -395,7 +465,21 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
             horzLines: { color: '#2A2E39' },
           },
           crosshair: {
-            mode: 0,
+            mode: 0, // 0 for normal, 1 for magnet
+            vertLine: {
+              color: 'rgba(224, 227, 235, 0.1)',
+              width: 1,
+              style: 0, // 0 for solid, 1 for dotted, 2 for dashed
+              visible: true,
+              labelVisible: true,
+            },
+            horzLine: {
+              color: 'rgba(224, 227, 235, 0.1)',
+              width: 1,
+              style: 0,
+              visible: true,
+              labelVisible: true,
+            },
           },
           timeScale: {
             borderColor: '#2A2E39',
@@ -462,128 +546,115 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
         resizeObserverRef.current = new ResizeObserver(handleResize);
         resizeObserverRef.current.observe(chartContainerRef.current);
         
-        // Subscribe to crosshair move
-        chart.subscribeCrosshairMove((param) => {
-          try {
-            if (param && param.time) {
-              // Find the data point at the crosshair position
-              const dataPoint = data.find(d => d.time === param.time);
-              if (dataPoint) {
-                // Get indicator values at this point
-                const indicatorValues = {};
-                
-                // For each indicator in the context, find the value at the current time
-                context.indicators.forEach((indicator, index) => {
-                  try {
-                    const indicatorModule = getIndicator(indicator.type);
-                    if (!indicatorModule) return;
-                    
-                    // Calculate the indicator data directly - this ensures we always have the latest data
-                    const calculatedData = indicatorModule.calculate(data, indicator);
-                    
-                    // Find the data point at the current time
-                    const indicatorDataPoint = calculatedData.find(d => d.time === param.time);
-                    
-                    if (indicatorDataPoint) {
-                      // Special handling for SMA indicator
-                      if (indicator.type === 'SMA') {
-                        // For SMA, the value might be directly in the data point or in a 'value' property
-                        if (typeof indicatorDataPoint === 'number') {
-                          indicatorValues[indicator.type] = indicatorDataPoint;
-                          console.log(`Found direct SMA value at time ${param.time}: ${indicatorDataPoint}`);
-                        } else if (indicatorDataPoint.value !== undefined) {
-                          indicatorValues[indicator.type] = indicatorDataPoint.value;
-                          console.log(`Found SMA value property at time ${param.time}: ${indicatorDataPoint.value}`);
-                        } else if (indicatorDataPoint.close !== undefined) {
-                          indicatorValues[indicator.type] = indicatorDataPoint.close;
-                          console.log(`Found SMA close property at time ${param.time}: ${indicatorDataPoint.close}`);
-                        } else {
-                          // Try to find any numeric property
-                          console.log('SMA data point structure:', indicatorDataPoint);
-                          const keys = Object.keys(indicatorDataPoint);
-                          for (const key of keys) {
-                            if (key !== 'time' && typeof indicatorDataPoint[key] === 'number') {
-                              indicatorValues[indicator.type] = indicatorDataPoint[key];
-                              console.log(`Found SMA numeric property ${key} at time ${param.time}: ${indicatorDataPoint[key]}`);
-                              break;
-                            }
-                          }
-                        }
-                      }
-                      // Store the value based on indicator type
-                      else if (indicator.type === 'BB') {
-                        indicatorValues[indicator.type] = {
-                          middle: indicatorDataPoint.middle,
-                          upper: indicatorDataPoint.upper,
-                          lower: indicatorDataPoint.lower
-                        };
-                        console.log(`Found BB values at time ${param.time}: middle=${indicatorDataPoint.middle}`);
-                      } 
-                      else if (indicator.type === 'MACD') {
-                        indicatorValues[indicator.type] = {
-                          macd: indicatorDataPoint.macd,
-                          signal: indicatorDataPoint.signal,
-                          histogram: indicatorDataPoint.histogram
-                        };
-                        console.log(`Found MACD values at time ${param.time}: macd=${indicatorDataPoint.macd}`);
-                      }
-                      else if (indicatorDataPoint.value !== undefined) {
-                        // For simple indicators like EMA, RSI
-                        indicatorValues[indicator.type] = indicatorDataPoint.value;
-                        console.log(`Found value for ${indicator.type} at time ${param.time}: ${indicatorDataPoint.value}`);
-                      }
-                      else {
-                        // Fallback for any other format
-                        console.log(`Found data for ${indicator.type} but in unexpected format:`, indicatorDataPoint);
-                        // Try to extract a value if possible
-                        const firstValueKey = Object.keys(indicatorDataPoint).find(key => 
-                          key !== 'time' && typeof indicatorDataPoint[key] === 'number'
-                        );
-                        if (firstValueKey) {
-                          indicatorValues[indicator.type] = indicatorDataPoint[firstValueKey];
-                          console.log(`Using ${firstValueKey} as value: ${indicatorValues[indicator.type]}`);
-                        }
-                      }
-                    } else {
-                      console.log(`No data found for ${indicator.type} at time ${param.time}`);
-                    }
-                  } catch (err) {
-                    console.error(`Error processing indicator ${indicator.type}:`, err);
-                  }
-                });
-                
-                console.log('Crosshair data:', { time: param.time, indicatorValues });
-                
-                // Update crosshair data
-                setCrosshairData({
-                  time: param.time,
-                  point: dataPoint,
-                  indicatorValues
-                });
-              }
-            } else {
-              setCrosshairData(null);
-            }
-          } catch (error) {
-            console.error('Error in crosshair move handler:', error);
-          }
-        });
-        
-        // Add a mouse move handler to the chart container
+        // Add a direct mousemove event listener to the chart container
         chartContainerRef.current.addEventListener('mousemove', (e) => {
-          // This will force the chart to update the crosshair
-          if (chartRef.current) {
+          if (!chartRef.current || !data || data.length === 0) return;
+          
+          try {
             const rect = chartContainerRef.current.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             
-            // Get the time at the current mouse position
-            const timeScale = chartRef.current.timeScale();
-            const logical = timeScale.coordinateToLogical(x);
-            if (logical !== null) {
-              // This will trigger the crosshair move event
-              chartRef.current.setCrosshairPosition(x, y, 0);
+            // Check if mouse is within chart area
+            if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+              // Get the time at the current mouse position
+              const timeScale = chartRef.current.timeScale();
+              const logical = timeScale.coordinateToLogical(x);
+              
+              if (logical !== null) {
+                // Find the closest data point
+                let closestPoint = null;
+                let minDistance = Infinity;
+                
+                for (const point of data) {
+                  const pointTime = typeof point.time === 'number' 
+                    ? point.time 
+                    : new Date(point.time).getTime() / 1000;
+                  
+                  const distance = Math.abs(pointTime - logical);
+                  
+                  if (distance < minDistance) {
+                    minDistance = distance;
+                    closestPoint = point;
+                  }
+                }
+                
+                if (closestPoint) {
+                  // Get indicator values for this point
+                  const indicatorValues = {};
+                  
+                  // Process indicators
+                  context.indicators.forEach(indicator => {
+                    try {
+                      const indicatorModule = getIndicator(indicator.type);
+                      if (!indicatorModule) return;
+                      
+                      const calculatedData = indicatorModule.calculate(data, indicator);
+                      const indicatorPoint = calculatedData.find(d => d.time === closestPoint.time);
+                      
+                      if (indicatorPoint) {
+                        if (indicator.type === 'SMA') {
+                          indicatorValues[indicator.type] = indicatorPoint.value;
+                        } else if (indicator.type === 'BB') {
+                          indicatorValues[indicator.type] = {
+                            middle: indicatorPoint.middle,
+                            upper: indicatorPoint.upper,
+                            lower: indicatorPoint.lower
+                          };
+                        } else if (indicator.type === 'MACD') {
+                          indicatorValues[indicator.type] = {
+                            macd: indicatorPoint.macd,
+                            signal: indicatorPoint.signal,
+                            histogram: indicatorPoint.histogram
+                          };
+                        } else if (indicatorPoint.value !== undefined) {
+                          indicatorValues[indicator.type] = indicatorPoint.value;
+                        }
+                      }
+                    } catch (err) {
+                      console.error(`Error processing indicator ${indicator.type}:`, err);
+                    }
+                  });
+                  
+                  // Update crosshair data
+                  setCrosshairData({
+                    time: closestPoint.time,
+                    point: closestPoint,
+                    indicatorValues
+                  });
+                  
+                  console.log('Updated crosshair data from mousemove:', closestPoint);
+                }
+              }
             }
+          } catch (error) {
+            console.error('Error in mousemove handler:', error);
+          }
+        });
+        
+        // Add a mouse leave handler
+        chartContainerRef.current.addEventListener('mouseleave', () => {
+          // Reset to the latest candle
+          if (data && data.length > 0) {
+            const latestCandle = data[data.length - 1];
+            const previousCandle = data.length > 1 ? data[data.length - 2] : null;
+            
+            const change = previousCandle ? latestCandle.close - previousCandle.close : 0;
+            const changePercent = previousCandle ? (change / previousCandle.close) * 100 : 0;
+            
+            setOhlcvData({
+              open: latestCandle.open,
+              high: latestCandle.high,
+              low: latestCandle.low,
+              close: latestCandle.close,
+              volume: latestCandle.volume,
+              change,
+              changePercent,
+              positive: change >= 0
+            });
+            
+            // Clear crosshair data
+            setCrosshairData(null);
           }
         });
         
@@ -940,6 +1011,12 @@ const ChartContainer = ({ symbol, timeframe, data, context = { indicators: [] },
               <OHLCVLabel>V</OHLCVLabel>
               <OHLCVValue>{formatNumber(ohlcvData.volume, 0)}</OHLCVValue>
             </OHLCVItem>
+            
+            {crosshairData && crosshairData.time && (
+              <CandleTime>
+                {formatTimestamp(crosshairData.time)}
+              </CandleTime>
+            )}
           </OHLCVContainer>
           
           <ChangeValue $positive={ohlcvData.positive}>

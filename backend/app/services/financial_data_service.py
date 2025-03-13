@@ -5,6 +5,11 @@ import csv
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import random
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import time
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -21,33 +26,94 @@ data_cache = {}
 cache_expiry = {}
 CACHE_DURATION = 60 * 5  # 5 minutes in seconds
 
-def get_financial_data(symbol, timeframe):
+def get_financial_data(symbol, timeframe, limit=100):
     """
     Get financial data for a specific symbol and timeframe
     
     Args:
-        symbol (str): The stock symbol (e.g., 'AAPL')
-        timeframe (str): The timeframe (e.g., '1D', '1H', '15min')
+        symbol (str): The trading symbol (e.g., 'BTCUSDT', 'AAPL')
+        timeframe (str): The timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')
+        limit (int): The number of data points to return
         
     Returns:
-        dict: Financial data in a format suitable for charting
+        list: A list of dictionaries containing OHLCV data
     """
-    cache_key = f"{symbol}_{timeframe}"
-    
-    # Check if data is in cache and not expired
-    if cache_key in data_cache and datetime.now().timestamp() < cache_expiry.get(cache_key, 0):
-        return data_cache[cache_key]
-    
-    # Always use CSV data for this project
-    csv_data = get_csv_data(timeframe)
-    if csv_data and "error" not in csv_data:
-        # Cache the data
-        data_cache[cache_key] = csv_data
-        cache_expiry[cache_key] = (datetime.now() + timedelta(seconds=CACHE_DURATION)).timestamp()
-        return csv_data
-    
-    # If CSV data is not available, use mock data
-    return generate_mock_data(symbol, timeframe)
+    try:
+        print(f"Fetching financial data for {symbol} on {timeframe} timeframe")
+        
+        # Check if we have data from the frontend
+        if symbol == "BTCUSDT" and timeframe in ['1m', '1min', '5m', '5min', '15m', '15min']:
+            # For crypto on short timeframes, we'll generate mock data
+            # since yfinance doesn't provide real-time minute data for crypto
+            return generate_mock_data(symbol, timeframe, limit)
+        
+        # Map timeframe to yfinance interval
+        interval_map = {
+            '1m': '1m',
+            '1min': '1m',
+            '5m': '5m',
+            '5min': '5m',
+            '15m': '15m',
+            '15min': '15m',
+            '30m': '30m',
+            '30min': '30m',
+            '1h': '1h',
+            '4h': '4h',
+            '1d': '1d',
+            '1D': '1d',
+            'D': '1d'
+        }
+        
+        interval = interval_map.get(timeframe, '1d')
+        
+        # Determine the period based on the interval and limit
+        if interval == '1m':
+            period = '1d'  # yfinance only provides 1m data for the last 7 days
+        elif interval == '5m' or interval == '15m' or interval == '30m':
+            period = '7d'
+        elif interval == '1h':
+            period = '30d'
+        elif interval == '4h':
+            period = '60d'
+        else:
+            period = '1y'
+        
+        # For stocks, add the exchange if not present
+        if symbol.upper() in ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA'] and '.' not in symbol:
+            symbol = f"{symbol}.US"
+        
+        # Get data from yfinance
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period=period, interval=interval)
+        
+        # If no data, try to generate mock data
+        if df.empty:
+            print(f"No data available for {symbol} on {timeframe} timeframe, generating mock data")
+            return generate_mock_data(symbol, timeframe, limit)
+        
+        # Convert to list of dictionaries
+        data = []
+        for index, row in df.iterrows():
+            timestamp = int(index.timestamp())
+            data.append({
+                'time': timestamp,
+                'open': float(row['Open']),
+                'high': float(row['High']),
+                'low': float(row['Low']),
+                'close': float(row['Close']),
+                'volume': float(row['Volume'])
+            })
+        
+        # Limit the number of data points
+        if limit and limit > 0:
+            data = data[-limit:]
+        
+        return data
+    except Exception as e:
+        print(f"Error fetching financial data: {str(e)}")
+        traceback.print_exc()
+        # Return mock data as a fallback
+        return generate_mock_data(symbol, timeframe, limit)
 
 def get_csv_data(timeframe):
     """
@@ -154,59 +220,92 @@ def get_csv_data(timeframe):
         print(f"Error reading CSV data: {str(e)}")
         return {"error": f"Failed to process CSV data: {str(e)}"}
 
-def generate_mock_data(symbol, timeframe):
+def generate_mock_data(symbol, timeframe, limit=100):
     """
-    Generate mock data for testing
+    Generate mock financial data
     
     Args:
-        symbol (str): The stock symbol
+        symbol (str): The trading symbol
         timeframe (str): The timeframe
+        limit (int): The number of data points to generate
         
     Returns:
-        dict: Mock financial data
+        list: A list of dictionaries containing OHLCV data
     """
+    print(f"Generating mock data for {symbol} on {timeframe} timeframe")
+    
+    # Set the base price based on the symbol
+    if symbol.upper() == 'BTCUSDT':
+        base_price = 40000
+        volatility = 0.02
+    elif symbol.upper() == 'ETHUSDT':
+        base_price = 2000
+        volatility = 0.03
+    elif symbol.upper() in ['AAPL', 'AAPL.US']:
+        base_price = 150
+        volatility = 0.01
+    elif symbol.upper() in ['MSFT', 'MSFT.US']:
+        base_price = 300
+        volatility = 0.01
+    else:
+        base_price = 100
+        volatility = 0.02
+    
+    # Set the time interval based on the timeframe
+    if timeframe in ['1m', '1min']:
+        interval = 60  # 1 minute in seconds
+    elif timeframe in ['5m', '5min']:
+        interval = 300  # 5 minutes in seconds
+    elif timeframe in ['15m', '15min']:
+        interval = 900  # 15 minutes in seconds
+    elif timeframe in ['30m', '30min']:
+        interval = 1800  # 30 minutes in seconds
+    elif timeframe in ['1h']:
+        interval = 3600  # 1 hour in seconds
+    elif timeframe in ['4h']:
+        interval = 14400  # 4 hours in seconds
+    else:
+        interval = 86400  # 1 day in seconds
+    
+    # Generate data
     data = []
-    base_price = 82000  # Starting price for BTC
-    base_volume = 10  # Base volume
+    current_time = int(time.time())
+    current_price = base_price
     
-    now = datetime.now()
-    # Generate 100 candles
-    for i in range(100, -1, -1):
-        # Calculate time based on timeframe
-        interval_minutes = convert_timeframe_to_minutes(timeframe)
-        candle_time = now - timedelta(minutes=i * interval_minutes)
+    for i in range(limit):
+        # Calculate the timestamp for this candle
+        timestamp = current_time - (limit - i - 1) * interval
         
-        # Generate realistic price movements
-        volatility = base_price * 0.002  # 0.2% volatility
-        open_price = base_price + (volatility * (0.5 - random.random()))
+        # Generate random price movement
+        price_change = current_price * volatility * (random.random() * 2 - 1)
+        open_price = current_price
+        close_price = current_price + price_change
         
-        # Higher volatility for high and low
-        high_price = open_price + (volatility * random.random())
-        low_price = open_price - (volatility * random.random())
+        # Ensure prices are positive
+        if close_price <= 0:
+            close_price = open_price * 0.9
         
-        # Close price between high and low
-        close_price = low_price + ((high_price - low_price) * random.random())
+        # Generate high and low prices
+        high_price = max(open_price, close_price) * (1 + random.random() * volatility)
+        low_price = min(open_price, close_price) * (1 - random.random() * volatility)
         
-        # Volume with some randomness
-        volume = base_volume * (0.5 + random.random())
+        # Generate random volume
+        volume = base_price * 10 * (0.5 + random.random())
         
-        # Update base price for next candle
-        base_price = close_price
-        
+        # Add the candle to the data
         data.append({
-            'time': int(candle_time.timestamp()),
-            'open': round(open_price, 2),
-            'high': round(high_price, 2),
-            'low': round(low_price, 2),
-            'close': round(close_price, 2),
-            'volume': round(volume, 2)
+            'time': timestamp,
+            'open': float(open_price),
+            'high': float(high_price),
+            'low': float(low_price),
+            'close': float(close_price),
+            'volume': float(volume)
         })
+        
+        # Update the current price for the next candle
+        current_price = close_price
     
-    return {
-        'symbol': symbol,
-        'timeframe': timeframe,
-        'candles': data
-    }
+    return data
 
 def convert_timeframe_to_minutes(timeframe):
     """

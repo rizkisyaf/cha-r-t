@@ -1,19 +1,123 @@
 import os
 import json
-import openai
 import requests
 import re
 from dotenv import load_dotenv
+from app.services.financial_data_service import get_financial_data
 
 # Load environment variables
 load_dotenv()
 
-# Set OpenAI API key
-openai.api_key = os.getenv('OPENAI_API_KEY')
+# Get Mistral API key from environment
+MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY')
+MISTRAL_API_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions'
+
+# Define available functions that Mistral can call
+AVAILABLE_FUNCTIONS = {
+    "get_financial_data": {
+        "name": "get_financial_data",
+        "description": "Get financial data for a specific symbol and timeframe",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "The trading symbol (e.g., 'BTCUSDT', 'AAPL')"
+                },
+                "timeframe": {
+                    "type": "string",
+                    "description": "The timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')"
+                }
+            },
+            "required": ["symbol", "timeframe"]
+        }
+    },
+    "analyze_chart": {
+        "name": "analyze_chart",
+        "description": "Analyzes chart data and returns insights about trends, patterns, and key levels.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "The trading symbol to analyze (e.g., 'BTCUSDT', 'AAPL')"
+                },
+                "timeframe": {
+                    "type": "string",
+                    "description": "The timeframe to analyze (e.g., '1m', '5m', '15m', '1h', '4h', '1d')"
+                },
+                "includePatterns": {
+                    "type": "boolean",
+                    "description": "Whether to include pattern detection in the analysis"
+                },
+                "includeSupportResistance": {
+                    "type": "boolean",
+                    "description": "Whether to include support and resistance levels in the analysis"
+                }
+            },
+            "required": ["symbol", "timeframe"]
+        }
+    }
+}
+
+# Function handlers
+def execute_function(function_name, args):
+    """
+    Execute a function based on its name and arguments
+    
+    Args:
+        function_name (str): The name of the function to execute
+        args (dict): The arguments for the function
+        
+    Returns:
+        dict: The result of the function execution
+    """
+    if function_name == "get_financial_data":
+        try:
+            data = get_financial_data(args.get("symbol", "BTCUSDT"), args.get("timeframe", "1d"))
+            return {
+                "success": True,
+                "data": data
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    elif function_name == "analyze_chart":
+        # Implement chart analysis logic here
+        symbol = args.get("symbol", "BTCUSDT")
+        timeframe = args.get("timeframe", "1d")
+        include_patterns = args.get("includePatterns", False)
+        include_support_resistance = args.get("includeSupportResistance", False)
+        
+        try:
+            # Get the financial data
+            data = get_financial_data(symbol, timeframe)
+            
+            # For now, return a simple analysis
+            return {
+                "success": True,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "trend": "bullish" if data[-1]["close"] > data[0]["close"] else "bearish",
+                "price_change_percent": ((data[-1]["close"] - data[0]["close"]) / data[0]["close"]) * 100,
+                "volume_avg": sum(item["volume"] for item in data) / len(data)
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    else:
+        return {
+            "success": False,
+            "error": f"Function {function_name} not implemented"
+        }
 
 def process_message(message, chart_context):
     """
-    Process a user message with the OpenAI API or zirodelta.com and return a response
+    Process a user message with the Mistral AI API and return a response
     
     Args:
         message (str): The user's message
@@ -23,108 +127,122 @@ def process_message(message, chart_context):
         dict: Response containing text and/or commands
     """
     try:
+        # Check if Mistral API key is set
+        if not MISTRAL_API_KEY:
+            return {
+                "text": "Mistral API key is not configured. Please set MISTRAL_API_KEY in your environment.",
+                "commands": []
+            }
+        
         # Create a prompt that includes the message and chart context
         prompt = create_prompt(message, chart_context)
         
-        # Check if OpenAI API key is set
-        if not openai.api_key or openai.api_key == "your_openai_api_key_here":
-            # Use zirodelta.com endpoint instead
-            return call_zirodelta_ai(prompt)
+        # Initialize conversation
+        conversation = [
+            {"role": "system", "content": get_system_prompt()},
+            {"role": "user", "content": prompt}
+        ]
         
-        # Call OpenAI API
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": get_system_prompt()},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=1000
+        # Prepare the tools array for Mistral
+        tools = [
+            {
+                "type": "function",
+                "function": func
+            } for func in AVAILABLE_FUNCTIONS.values()
+        ]
+        
+        # Step 2: Model generates function arguments
+        response = requests.post(
+            MISTRAL_API_ENDPOINT,
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {MISTRAL_API_KEY}'
+            },
+            json={
+                "model": "mistral-small-latest",  # Use a model that supports function calling
+                "messages": conversation,
+                "tools": tools,
+                "tool_choice": "auto",  # Let the model decide whether to use tools
+                "max_tokens": 1024
+            }
         )
         
-        # Extract the response text
-        response_text = response.choices[0].message.content
+        # Check if the request was successful
+        if not response.ok:
+            raise Exception(f"API error: {response.status_code} - {response.text}")
         
-        # Format the response for better readability
-        response_text = format_response(response_text)
+        # Parse the response
+        data = response.json()
+        assistant_response = data["choices"][0]["message"]
         
-        # Parse the response to extract commands if any
-        return parse_response(response_text)
+        # Add the assistant response to the conversation
+        conversation.append(assistant_response)
+        
+        # Check if there are tool calls in the response
+        if "tool_calls" in assistant_response and assistant_response["tool_calls"]:
+            # Step 3: Execute functions to obtain tool results
+            commands = []
+            
+            for tool_call in assistant_response["tool_calls"]:
+                if tool_call["type"] == "function":
+                    function_name = tool_call["function"]["name"]
+                    function_args = json.loads(tool_call["function"]["arguments"])
+                    
+                    # Execute the function
+                    result = execute_function(function_name, function_args)
+                    
+                    # Add the result to commands if successful
+                    if result.get("success"):
+                        commands.append(result)
+                    
+                    # Add the tool response to the conversation
+                    conversation.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "name": function_name,
+                        "content": json.dumps(result)
+                    })
+            
+            # Step 4: Model generates final answer
+            final_response = requests.post(
+                MISTRAL_API_ENDPOINT,
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {MISTRAL_API_KEY}'
+                },
+                json={
+                    "model": "mistral-small-latest",
+                    "messages": conversation,
+                    "max_tokens": 1024
+                }
+            )
+            
+            if not final_response.ok:
+                raise Exception(f"API error in final response: {final_response.status_code} - {final_response.text}")
+            
+            final_data = final_response.json()
+            final_assistant_response = final_data["choices"][0]["message"]["content"]
+            
+            # Format the response for better readability
+            formatted_response = format_response(final_assistant_response)
+            
+            return {
+                "text": formatted_response,
+                "commands": commands
+            }
+        else:
+            # No tool calls, just return the response
+            formatted_response = format_response(assistant_response["content"])
+            
+            return {
+                "text": formatted_response,
+                "commands": []
+            }
     
     except Exception as e:
         print(f"Error in AI service: {str(e)}")
         return {
             "text": f"Sorry, I encountered an error processing your request: {str(e)}",
-            "commands": []
-        }
-
-def call_zirodelta_ai(prompt):
-    """
-    Call the zirodelta.com AI endpoint
-    
-    Args:
-        prompt (str): The prompt text
-        
-    Returns:
-        dict: Response containing text and commands
-    """
-    try:
-        # Format the prompt as a direct question/instruction
-        formatted_prompt = f"""You are a financial market analyst and AI assistant for a charting application. 
-Based on the following market data and user request, provide a clear and concise analysis. 
-
-Format your response with:
-1. Clear section headings (use ** for bold)
-2. Bullet points for lists (use • symbol)
-3. Line breaks between sections
-4. Highlight important numbers and values
-5. Use short paragraphs with 2-3 sentences maximum
-6. Add spacing between paragraphs and sections
-
-Here's the data and request:
-
-{prompt}"""
-        
-        # Make the API request
-        response = requests.post(
-            'https://ai.zirodelta.com/generate',
-            headers={
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            json={
-                'model': 'mistral',
-                'prompt': formatted_prompt,
-                'stream': False,
-                'max_tokens': 500,
-                'temperature': 0.7
-            },
-            timeout=10
-        )
-        
-        # Check if the request was successful
-        if not response.ok:
-            raise Exception(f"API error: {response.status_code}")
-        
-        # Parse the response
-        data = response.json()
-        
-        # Extract the AI response
-        if data and 'response' in data:
-            ai_response = data['response'].strip()
-            
-            # Format the response for better readability
-            ai_response = format_response(ai_response)
-            
-            # Parse the response to extract commands if any
-            return parse_response(ai_response)
-        else:
-            raise Exception("Invalid response format from AI service")
-    
-    except Exception as e:
-        print(f"Error calling zirodelta AI: {str(e)}")
-        return {
-            "text": "Sorry, I couldn't connect to the analysis service. Please try again later.",
             "commands": []
         }
 
@@ -266,39 +384,4 @@ Available actions include:
 - run_backtest: Run a backtest on a strategy
 
 Be concise, accurate, and helpful in your responses.
-"""
-
-def parse_response(response_text):
-    """
-    Parse the response text to extract commands
-    
-    Args:
-        response_text (str): The response text from the AI
-        
-    Returns:
-        dict: Response containing text and commands
-    """
-    # Initialize response
-    result = {
-        "text": response_text,
-        "commands": []
-    }
-    
-    # Check if there are any JSON code blocks
-    json_blocks = re.findall(r'```json\n(.*?)\n```', response_text, re.DOTALL)
-    
-    # Parse each JSON block as a command
-    for block in json_blocks:
-        try:
-            command = json.loads(block)
-            result["commands"].append(command)
-            
-            # Remove the JSON block from the text response
-            result["text"] = result["text"].replace(f"```json\n{block}\n```", "")
-        except json.JSONDecodeError:
-            print(f"Error parsing JSON: {block}")
-    
-    # Clean up the text response
-    result["text"] = result["text"].strip()
-    
-    return result 
+""" 
