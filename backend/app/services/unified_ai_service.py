@@ -6,6 +6,9 @@ import random
 from dotenv import load_dotenv
 from app.services.financial_data_service import get_financial_data
 import traceback
+from typing import List, Dict, Any, Optional, Union, Callable
+from datetime import datetime
+from app.services.error_handling import log_error, format_error_response
 
 # Load environment variables
 load_dotenv()
@@ -856,13 +859,14 @@ Please respond to the user's message and provide any necessary chart commands.
                                 )
                             except Exception as e:
                                 print(f"DEBUG: Error executing function {function_name}: {str(e)}")
-                                traceback.print_exc()
+                                log_error(e, {
+                                    "service": "UnifiedAIService",
+                                    "function": function_name,
+                                    "args": function_args
+                                })
                                 
-                                # Add error response
-                                error_result = {
-                                    "success": False,
-                                    "error": f"Error executing function {function_name}: {str(e)}"
-                                }
+                                # Format error response
+                                error_result = format_error_response(e, include_traceback=True)
                                 
                                 self.add_message(
                                     "tool", 
