@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-import csv
+import re
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import random
@@ -18,8 +18,14 @@ load_dotenv()
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 BASE_URL = 'https://www.alphavantage.co/query'
 
-# CSV data file path
-CSV_DATA_FILE = os.path.join(os.path.dirname(__file__), 'futures_orderbook_data.csv')
+# Data file paths
+JSON_DATA_FILES = {
+    'daily': os.path.join(os.path.dirname(__file__), 'btcusdt_1year.json'),
+    '1min_7days': os.path.join(os.path.dirname(__file__), 'btcusdt_1min_7days.json'),
+    '1min_30days': os.path.join(os.path.dirname(__file__), 'btcusdt_1min_30days.json'),
+    '1min_90days': os.path.join(os.path.dirname(__file__), 'btcusdt_1min_90days.json'),
+    '1min_180days': os.path.join(os.path.dirname(__file__), 'btcusdt_1min_180days.json')
+}
 
 # Cache for financial data to reduce API calls
 data_cache = {}
@@ -41,12 +47,13 @@ def get_financial_data(symbol, timeframe, limit=100):
     try:
         print(f"Fetching financial data for {symbol} on {timeframe} timeframe")
         
-        # Check if we have data from the frontend
-        if symbol == "BTCUSDT" and timeframe in ['1m', '1min', '5m', '5min', '15m', '15min']:
-            # For crypto on short timeframes, we'll generate mock data
-            # since yfinance doesn't provide real-time minute data for crypto
-            return generate_mock_data(symbol, timeframe, limit)
+        # For BTCUSDT, try to use our JSON data files first
+        if symbol.upper() == "BTCUSDT":
+            json_data = get_json_data(timeframe, limit)
+            if not json_data.get("error"):
+                return json_data
         
+        # For other symbols or if JSON data fails, use yfinance or generate mock data
         # Map timeframe to yfinance interval
         interval_map = {
             '1m': '1m',
@@ -115,110 +122,192 @@ def get_financial_data(symbol, timeframe, limit=100):
         # Return mock data as a fallback
         return generate_mock_data(symbol, timeframe, limit)
 
-def get_csv_data(timeframe):
+def get_json_data(timeframe, limit=100):
     """
-    Get financial data from the CSV file
+    Get financial data from the appropriate JSON file based on timeframe
     
     Args:
-        timeframe (str): The timeframe (e.g., '1D', '1H', '15min')
+        timeframe (str): The timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')
+        limit (int): The number of data points to return
         
     Returns:
         dict: Financial data in a format suitable for charting
     """
     try:
-        # Check if CSV file exists
-        if not os.path.exists(CSV_DATA_FILE):
-            print(f"CSV file not found: {CSV_DATA_FILE}")
-            return {"error": "CSV data not available"}
+        # Select the appropriate file based on timeframe
+        file_key = select_json_file_for_timeframe(timeframe)
+        json_file = JSON_DATA_FILES[file_key]
         
-        # Read CSV file
-        print(f"Reading CSV data from {CSV_DATA_FILE}")
+        # Check if JSON file exists
+        if not os.path.exists(json_file):
+            print(f"JSON file not found: {json_file}")
+            return {"error": "JSON data not available"}
         
-        # Process the orderbook data into OHLC candles
-        raw_data = []
-        with open(CSV_DATA_FILE, 'r') as file:
-            reader = csv.DictReader(file)
-            
-            for row in reader:
-                try:
-                    # Convert timestamp from milliseconds to datetime
-                    timestamp = int(row['timestamp']) / 1000
-                    
-                    # Use mid price (average of best bid and ask)
-                    bid_price = float(row['bid_price1'])
-                    ask_price = float(row['ask_price1'])
-                    price = (bid_price + ask_price) / 2
-                    
-                    # Use sum of bid and ask quantities as volume
-                    volume = float(row['bid_qty1']) + float(row['ask_qty1'])
-                    
-                    raw_data.append({
-                        'timestamp': timestamp,
-                        'price': price,
-                        'volume': volume
-                    })
-                except (ValueError, KeyError) as e:
-                    # Skip invalid rows
-                    continue
-                
-                # Limit to 50,000 rows for performance
-                if len(raw_data) >= 50000:
-                    break
+        # Read JSON file
+        print(f"Reading JSON data from {json_file}")
+        with open(json_file, 'r') as file:
+            raw_data = json.load(file)
         
-        print(f"Loaded {len(raw_data)} data points from CSV")
+        print(f"Loaded {len(raw_data)} data points from JSON")
         
-        # Sort by timestamp
-        raw_data.sort(key=lambda x: x['timestamp'])
+        # Convert millisecond timestamps to seconds if needed
+        for candle in raw_data:
+            # Check if timestamp is in milliseconds (13 digits)
+            if len(str(int(candle['time']))) > 10:
+                candle['time'] = int(candle['time'] / 1000)
         
-        # Convert to OHLC based on timeframe
-        interval_minutes = convert_timeframe_to_minutes(timeframe)
-        interval_seconds = interval_minutes * 60
+        # Sort by time
+        raw_data.sort(key=lambda x: x['time'])
         
-        # Group data by time intervals
-        candle_groups = {}
-        for data_point in raw_data:
-            # Calculate candle timestamp (floor to interval)
-            candle_timestamp = int(data_point['timestamp'] // interval_seconds * interval_seconds)
-            
-            if candle_timestamp not in candle_groups:
-                candle_groups[candle_timestamp] = {
-                    'prices': [data_point['price']],
-                    'volumes': [data_point['volume']]
-                }
-            else:
-                candle_groups[candle_timestamp]['prices'].append(data_point['price'])
-                candle_groups[candle_timestamp]['volumes'].append(data_point['volume'])
+        # Process data based on timeframe
+        if file_key == 'daily' or timeframe.lower() in ['1d', 'd', 'daily', '1day']:
+            # Daily data doesn't need resampling
+            candles = raw_data
+        else:
+            # For minute data, we need to filter based on the requested timeframe
+            candles = filter_minute_data(raw_data, timeframe)
         
-        # Convert groups to OHLC candles
-        candles = []
-        for timestamp, data in candle_groups.items():
-            if len(data['prices']) > 0:
-                candles.append({
-                    'time': timestamp,
-                    'open': data['prices'][0],
-                    'high': max(data['prices']),
-                    'low': min(data['prices']),
-                    'close': data['prices'][-1],
-                    'volume': sum(data['volumes'])
-                })
+        # Limit the number of data points
+        if limit and limit > 0:
+            candles = candles[-limit:]
         
-        # Sort candles by time
-        candles.sort(key=lambda x: x['time'])
-        
-        # Limit to 500 candles for performance
-        if len(candles) > 500:
-            candles = candles[-500:]
-        
-        print(f"Created {len(candles)} candles from CSV data")
+        print(f"Processed {len(candles)} candles from JSON data for {timeframe} timeframe")
         
         return {
-            'symbol': 'BTC/USD Futures',
+            'symbol': 'BTCUSDT',
             'timeframe': timeframe,
             'candles': candles
         }
     except Exception as e:
-        print(f"Error reading CSV data: {str(e)}")
-        return {"error": f"Failed to process CSV data: {str(e)}"}
+        print(f"Error reading JSON data: {str(e)}")
+        traceback.print_exc()
+        return {"error": f"Failed to process JSON data: {str(e)}"}
+
+def select_json_file_for_timeframe(timeframe):
+    """
+    Select the appropriate JSON file based on the requested timeframe
+    
+    Args:
+        timeframe (str): The timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')
+        
+    Returns:
+        str: Key for the JSON_DATA_FILES dictionary
+    """
+    timeframe = timeframe.lower()
+    
+    if timeframe in ['1d', 'd', 'daily', '1day']:
+        return 'daily'
+    
+    # For all other timeframes, use minute data with appropriate history length
+    seconds = convert_timeframe_to_seconds(timeframe)
+    
+    # Calculate how many days of data we need based on the timeframe and a reasonable number of candles
+    # For example, for 4h timeframe, we want at least 90 days of data to have enough candles
+    if seconds >= 14400:  # 4h or higher
+        return '1min_180days'
+    elif seconds >= 3600:  # 1h
+        return '1min_90days'
+    elif seconds >= 900:  # 15m or higher
+        return '1min_30days'
+    else:  # 1m, 5m
+        return '1min_7days'
+
+def filter_minute_data(data, timeframe):
+    """
+    Filter minute data to match the requested timeframe
+    
+    Args:
+        data (list): List of 1-minute OHLCV dictionaries
+        timeframe (str): Target timeframe (e.g., '5m', '15m', '1h', '4h')
+        
+    Returns:
+        list: Filtered OHLCV data
+    """
+    # Convert timeframe to seconds
+    seconds = convert_timeframe_to_seconds(timeframe)
+    minute_seconds = 60
+    
+    # If timeframe is 1m, return the data as is
+    if seconds == minute_seconds:
+        return data
+    
+    print(f"Filtering 1-minute data to {timeframe} timeframe ({seconds} seconds)")
+    
+    # Group data by time intervals
+    candle_groups = {}
+    for candle in data:
+        # Calculate candle timestamp (floor to interval)
+        candle_timestamp = int(candle['time'] // seconds * seconds)
+        
+        if candle_timestamp not in candle_groups:
+            candle_groups[candle_timestamp] = {
+                'open': candle['open'],
+                'high': candle['high'],
+                'low': candle['low'],
+                'close': candle['close'],
+                'volume': candle['volume'],
+                'candles': [candle]
+            }
+        else:
+            group = candle_groups[candle_timestamp]
+            group['high'] = max(group['high'], candle['high'])
+            group['low'] = min(group['low'], candle['low'])
+            group['close'] = candle['close']
+            group['volume'] += candle['volume']
+            group['candles'].append(candle)
+    
+    # Convert groups to OHLCV candles
+    filtered = []
+    for timestamp, group in candle_groups.items():
+        filtered.append({
+            'time': timestamp,
+            'open': group['open'],
+            'high': group['high'],
+            'low': group['low'],
+            'close': group['close'],
+            'volume': group['volume']
+        })
+    
+    # Sort by time
+    filtered.sort(key=lambda x: x['time'])
+    
+    print(f"Filtered {len(data)} 1-minute candles to {len(filtered)} {timeframe} candles")
+    
+    return filtered
+
+def convert_timeframe_to_seconds(timeframe):
+    """
+    Convert timeframe to seconds
+    
+    Args:
+        timeframe (str): The timeframe (e.g., '1m', '5m', '15m', '1h', '4h')
+        
+    Returns:
+        int: Number of seconds in the timeframe
+    """
+    # Normalize timeframe format
+    timeframe = timeframe.lower()
+    
+    # Extract number and unit
+    match = re.match(r'(\d+)([mhdw])', timeframe)
+    if not match:
+        # Default to 1 day if format is not recognized
+        return 86400
+    
+    number, unit = match.groups()
+    number = int(number)
+    
+    # Convert to seconds
+    if unit == 'm':
+        return number * 60  # minutes
+    elif unit == 'h':
+        return number * 3600  # hours
+    elif unit == 'd':
+        return number * 86400  # days
+    elif unit == 'w':
+        return number * 604800  # weeks
+    else:
+        return 86400  # default to 1 day
 
 def generate_mock_data(symbol, timeframe, limit=100):
     """
@@ -306,53 +395,6 @@ def generate_mock_data(symbol, timeframe, limit=100):
         current_price = close_price
     
     return data
-
-def convert_timeframe_to_minutes(timeframe):
-    """
-    Convert timeframe to minutes for CSV data processing
-    
-    Args:
-        timeframe (str): The timeframe (e.g., '1D', '1H', '15min')
-        
-    Returns:
-        int: Number of minutes in the timeframe
-    """
-    timeframe_map = {
-        '1min': 1,
-        '5min': 5,
-        '15min': 15,
-        '30min': 30,
-        '1H': 60,
-        '4H': 240,
-        '1D': 1440,  # 24 hours
-        '1W': 10080,  # 7 days
-        '1M': 43200   # 30 days (approximate)
-    }
-    
-    return timeframe_map.get(timeframe, 15)  # Default to 15 minutes
-
-def convert_timeframe_to_interval(timeframe):
-    """
-    Convert the application timeframe to Alpha Vantage interval
-    
-    Args:
-        timeframe (str): The timeframe (e.g., '1D', '1H', '15min')
-        
-    Returns:
-        str: Alpha Vantage interval
-    """
-    timeframe_map = {
-        '1min': '1min',
-        '5min': '5min',
-        '15min': '15min',
-        '30min': '30min',
-        '1H': '60min',
-        '1D': 'daily',
-        '1W': 'weekly',
-        '1M': 'monthly'
-    }
-    
-    return timeframe_map.get(timeframe, 'daily')
 
 def get_intraday_data(symbol, interval):
     """

@@ -13,7 +13,10 @@ if [ -d "venv" ]; then
   source venv/bin/activate
   python app.py &
 else
-  echo -e "${YELLOW}Virtual environment not found. Run ./setup.sh first or create it manually.${NC}"
+  echo -e "${YELLOW}Virtual environment not found. Creating it now...${NC}"
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install flask flask-cors flask-socketio python-dotenv yfinance pandas numpy
   python app.py &
 fi
 BACKEND_PID=$!

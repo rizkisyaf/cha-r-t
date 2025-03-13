@@ -159,34 +159,19 @@ const formatLabel = (settings) => {
 // Series configuration for the chart
 const getSeriesOptions = (settings) => {
   return {
-    macdLine: {
+    macd: {
       color: settings.macdColor || metadata.defaultSettings.macdColor,
       lineWidth: 2,
       priceLineVisible: false,
-      priceScaleId: 'macd',
-      scaleMargins: {
-        top: 0.8,
-        bottom: 0,
-      },
     },
-    signalLine: {
+    signal: {
       color: settings.signalColor || metadata.defaultSettings.signalColor,
       lineWidth: 2,
       priceLineVisible: false,
-      priceScaleId: 'macd',
-      scaleMargins: {
-        top: 0.8,
-        bottom: 0,
-      },
     },
     histogram: {
       color: settings.histogramPositiveColor || metadata.defaultSettings.histogramPositiveColor,
       priceFormat: { type: 'volume' },
-      priceScaleId: 'macd',
-      scaleMargins: {
-        top: 0.8,
-        bottom: 0,
-      },
     }
   };
 };

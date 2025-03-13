@@ -155,23 +155,26 @@ function AppContent() {
       let data;
       try {
         data = await getFinancialData(symbol, timeframe);
+        if (data.error) {
+          console.error('Error from backend:', data.error);
+          return;
+        }
       } catch (error) {
-        console.log('Error fetching from API, using mock data instead');
-        data = { candles: generateMockData() };
+        console.error('Error fetching from API:', error);
+        return;
       }
       
-      setChartData(data.candles || generateMockData());
+      setChartData(data.candles || []);
       
       // Update chart context
       setChartContext(prev => ({
         ...prev,
-        symbol,
+        symbol: data.symbol || symbol,
         timeframe
       }));
     } catch (error) {
       console.error('Error fetching chart data:', error);
-      // Use mock data as fallback
-      setChartData(generateMockData());
+      setChartData([]);
     }
   };
 
@@ -317,28 +320,21 @@ function AppContent() {
           return;
         }
         
-        setChartContext(prev => ({
-          ...prev,
-          indicators: [...prev.indicators, {...command, id: commandId || Date.now()}]
-        }));
-        
-        // Verify indicator was added and execute any pending actions
-        setTimeout(() => {
-          const indicatorExists = chartContext.indicators.some(
-            ind => ind.type === command.type && ind.period === command.period
-          );
+        // Add the indicator using a state update callback to ensure we have the latest state
+        setChartContext(prev => {
+          const newIndicators = [...prev.indicators, {...command, id: commandId || Date.now()}];
           
-          if (!indicatorExists) {
-            console.log(`Indicator ${command.type} not found, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-            processCommand(command, commandId, retryCount + 1);
-          } else {
-            // Update the system message to show completion
-            updateSystemMessage(commandId, '✅ Done');
-            
-            // Check for pending actions
-            checkAndExecutePendingActions();
-          }
-        }, 1000);
+          // Update the system message to show completion
+          updateSystemMessage(commandId, '✅ Done');
+          
+          // Check for pending actions after state update
+          setTimeout(checkAndExecutePendingActions, 100);
+          
+          return {
+            ...prev,
+            indicators: newIndicators
+          };
+        });
         break;
         
       case 'remove_indicator':
@@ -644,37 +640,6 @@ function AppContent() {
     }
     
     return trades;
-  };
-
-  // Generate mock data for testing
-  const generateMockData = () => {
-    const data = [];
-    const basePrice = 1340;
-    const baseVolume = 500000;
-    
-    const now = new Date();
-    for (let i = 100; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      
-      const volatility = Math.random() * 50;
-      const open = basePrice + (Math.random() - 0.5) * volatility;
-      const high = open + Math.random() * 20;
-      const low = open - Math.random() * 20;
-      const close = (open + high + low) / 3 + (Math.random() - 0.5) * 10;
-      const volume = baseVolume + Math.random() * baseVolume;
-      
-      data.push({
-        time: date.getTime() / 1000,
-        open,
-        high,
-        low,
-        close,
-        volume
-      });
-    }
-    
-    return data;
   };
 
   // Handle timeframe change

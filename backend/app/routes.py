@@ -15,14 +15,23 @@ def health_check():
 @app.route('/api/financial-data', methods=['GET'])
 def get_financial_data():
     """Get financial data for a specific symbol and timeframe"""
-    symbol = request.args.get('symbol', 'AAPL')
-    timeframe = request.args.get('timeframe', '1D')
+    symbol = request.args.get('symbol', 'BTCUSDT')
+    timeframe = request.args.get('timeframe', '1m')
     limit = request.args.get('limit', 100, type=int)
     
     try:
+        # For BTCUSDT, use our JSON data files
+        if symbol.upper() == 'BTCUSDT':
+            data = financial_data_service.get_json_data(timeframe, limit)
+            if not data.get("error"):
+                return jsonify(data)
+        
+        # For other symbols, use regular financial data
         data = financial_data_service.get_financial_data(symbol, timeframe, limit)
         return jsonify(data)
     except Exception as e:
+        print(f"Error in get_financial_data: {str(e)}")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/chat', methods=['POST'])

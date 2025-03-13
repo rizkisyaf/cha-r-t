@@ -54,7 +54,7 @@ export const metadata = {
 
 // Calculation function
 export const calculate = (data, settings) => {
-  const { period, source = 'close', offset = 0 } = settings;
+  const { period = 20, source = 'close', offset = 0 } = settings;
   const smaData = [];
   
   // Ensure we have data to work with
@@ -65,38 +65,71 @@ export const calculate = (data, settings) => {
   
   // Log the first data point to understand its structure
   console.log('SMA calculation first data point:', data[0]);
+  console.log(`SMA calculation with period=${period}, source=${source}, offset=${offset}, data length=${data.length}`);
+  
+  // Ensure period is valid
+  if (period <= 0 || period >= data.length) {
+    console.warn(`Invalid SMA period (${period}) for data length ${data.length}`);
+    return [];
+  }
   
   for (let i = 0; i < data.length; i++) {
     if (i >= period - 1) {
       let sum = 0;
+      let validPoints = 0;
+      
       for (let j = 0; j < period; j++) {
-        // Make sure we handle different data formats
-        const value = data[i - j][source] !== undefined ? data[i - j][source] : 
-                     (data[i - j].close !== undefined ? data[i - j].close : null);
+        const dataPoint = data[i - j];
         
-        if (value === null) {
-          console.warn(`SMA calculation: Missing ${source} value at index ${i-j}`);
+        // Make sure the data point exists
+        if (!dataPoint) {
+          console.warn(`SMA calculation: Missing data point at index ${i-j}`);
+          continue;
+        }
+        
+        // Try to get the value from the specified source or fallback to close
+        let value = null;
+        
+        if (dataPoint[source] !== undefined) {
+          value = dataPoint[source];
+        } else if (dataPoint.close !== undefined) {
+          value = dataPoint.close;
+        }
+        
+        // Skip if value is not a number
+        if (value === null || value === undefined || isNaN(value)) {
+          console.warn(`SMA calculation: Invalid ${source} value at index ${i-j}:`, dataPoint);
           continue;
         }
         
         sum += value;
+        validPoints++;
       }
       
-      // Apply offset if needed
-      const offsetIndex = i + offset;
-      if (offsetIndex >= 0 && offsetIndex < data.length) {
-        const smaValue = sum / period;
-        console.log(`SMA value at time ${data[offsetIndex].time}: ${smaValue}`);
-        
-        smaData.push({
-          time: data[offsetIndex].time,
-          value: smaValue,
-        });
+      // Only calculate SMA if we have enough valid points
+      if (validPoints > 0) {
+        // Apply offset if needed
+        const offsetIndex = i + offset;
+        if (offsetIndex >= 0 && offsetIndex < data.length) {
+          const smaValue = sum / validPoints;
+          
+          smaData.push({
+            time: data[offsetIndex].time,
+            value: smaValue,
+          });
+        }
       }
     }
   }
   
   console.log(`SMA calculation complete: ${smaData.length} points calculated`);
+  
+  // Log a few sample points for debugging
+  if (smaData.length > 0) {
+    console.log('SMA first point:', smaData[0]);
+    console.log('SMA last point:', smaData[smaData.length - 1]);
+  }
+  
   return smaData;
 };
 
@@ -112,6 +145,7 @@ export const InputsSettings = ({ settings, onChange }) => {
           value={settings.period || metadata.defaultSettings.period} 
           onChange={onChange}
           min="1"
+          max="500"
         />
       </FormGroup>
       
@@ -122,13 +156,13 @@ export const InputsSettings = ({ settings, onChange }) => {
           value={settings.source || metadata.defaultSettings.source} 
           onChange={onChange}
         >
-          <option value="close">close</option>
-          <option value="open">open</option>
-          <option value="high">high</option>
-          <option value="low">low</option>
-          <option value="hl2">(high + low) / 2</option>
-          <option value="hlc3">(high + low + close) / 3</option>
-          <option value="ohlc4">(open + high + low + close) / 4</option>
+          <option value="close">Close</option>
+          <option value="open">Open</option>
+          <option value="high">High</option>
+          <option value="low">Low</option>
+          <option value="hl2">(H+L)/2</option>
+          <option value="hlc3">(H+L+C)/3</option>
+          <option value="ohlc4">(O+H+L+C)/4</option>
         </Select>
       </FormGroup>
       
@@ -139,6 +173,8 @@ export const InputsSettings = ({ settings, onChange }) => {
           name="offset" 
           value={settings.offset || metadata.defaultSettings.offset} 
           onChange={onChange}
+          min="-500"
+          max="500"
         />
       </FormGroup>
       
