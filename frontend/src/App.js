@@ -294,18 +294,11 @@ function AppContent() {
     
     // If the command comes from Mistral's function calling, it will have a success property
     if (command.success) {
-      // Extract the action from the command
-      const { action, ...args } = command;
+      // Extract the action and args from the command
+      const { action, success, ...args } = command;
       
-      // Create a new command object with the correct structure
-      const newCommand = {
-        action,
-        ...args
-      };
-      
-      // Process the new command with the same retry count
-      processCommand(newCommand, commandId, retryCount);
-      return;
+      // Use the extracted action and args directly
+      command = { action, ...args };
     }
     
     switch (command.action) {
