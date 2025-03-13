@@ -11,8 +11,12 @@ const MACD = {
   Settings: MACDModule.SettingsComponent,
   formatLabel: MACDModule.formatLabel,
   getSeriesOptions: MACDModule.getSeriesOptions,
-  getValueAtPosition: MACDModule.getValueAtPosition
+  getValueAtPosition: MACDModule.getValueAtPosition,
+  needsSeparatePane: true // MACD needs its own pane
 };
+
+// Add needsSeparatePane property to RSI
+RSI.needsSeparatePane = true;
 
 // Map of all available indicators
 const INDICATORS = {
