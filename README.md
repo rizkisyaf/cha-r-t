@@ -1,130 +1,116 @@
-# cha(r)t
+# cha(r)t - A Modern Financial Charting Application
 
-An AI-powered financial charting and analysis platform that allows traders to visualize and analyze financial data through natural language interaction.
-
-![cha(r)t Interface](docs/interface.png)
+cha(r)t is a modern financial charting application that provides real-time and historical financial data visualization for stocks, cryptocurrencies, and other financial instruments.
 
 ## Features
 
-- Interactive financial charts with AI-drawn patterns
-- Natural language interaction for chart modifications, strategy building, and data analysis
-- Backtesting trading strategies and real-time notifications based on market conditions
-- AI-powered insights and pattern recognition
-
-## Tech Stack
-
-- **Frontend**: React, TradingView Lightweight Charts, HTML Canvas
-- **Backend**: Flask (Python)
-- **AI**: OpenAI GPT API
-- **Financial Data**: Alpha Vantage API
-- **Database**: PostgreSQL
-- **Real-time Communication**: WebSockets
+- Real-time and historical financial data visualization
+- Multiple timeframes (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w, 1M)
+- Technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands)
+- Customizable chart layout
+- AI-powered market analysis
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js and npm
-- Python 3.8+
-- API keys for OpenAI and Alpha Vantage
+- Node.js (v14 or higher)
+- npm or yarn
+- Python 3.7+ (for backend)
+- pip (for Python packages)
 
 ### Installation
 
-1. Clone the repository
-   ```
+1. Clone the repository:
+   ```bash
    git clone https://github.com/yourusername/chart.git
    cd chart
    ```
 
-2. Set up the backend:
-   ```
-   cd backend
-   pip install -r requirements.txt
-   cp .env.example .env
-   ```
-   
-   Edit the `.env` file and add your API keys:
-   ```
-   OPENAI_API_KEY=your_openai_api_key_here
-   ALPHA_VANTAGE_API_KEY=your_alpha_vantage_api_key_here
-   ```
-
-3. Set up the frontend:
-   ```
-   cd ../frontend
+2. Install frontend dependencies:
+   ```bash
+   cd frontend
    npm install
    ```
 
+3. Install backend dependencies:
+   ```bash
+   cd ../backend
+   pip install -r requirements.txt
+   ```
+
+### Configuration
+
+#### Alpha Vantage API Key
+
+The application uses Alpha Vantage API to fetch real financial data. You need to get a free API key from Alpha Vantage:
+
+1. Go to [Alpha Vantage API Key](https://www.alphavantage.co/support/#api-key) and request a free API key
+2. Create or edit the `.env` file in the `frontend` directory:
+   ```
+   REACT_APP_ALPHA_VANTAGE_API_KEY=your_api_key_here
+   ```
+
+> **Note:** The free tier of Alpha Vantage API has rate limits (typically 5 API calls per minute and 500 calls per day). If you need more, consider upgrading to their premium plans.
+
 ### Running the Application
 
-You can run both the frontend and backend together using the provided script:
-
-```
-./start.sh
-```
-
-Or run them separately:
-
-1. Start the backend:
-   ```
-   cd backend
-   python app.py
-   ```
-
-2. Start the frontend (in a new terminal):
-   ```
+1. Start the frontend:
+   ```bash
    cd frontend
    npm start
    ```
 
-The application will be available at http://localhost:3000
+2. Start the backend (in a separate terminal):
+   ```bash
+   cd backend
+   python app.py
+   ```
 
-## Project Structure
-
-- `/frontend`: React application for the user interface
-  - `/src/components`: React components
-  - `/src/services`: API and socket services
-  - `/src/assets`: Static assets
-
-- `/backend`: Flask server for API endpoints and business logic
-  - `/app`: Main application package
-  - `/app/services`: Services for AI and financial data
-
-- `/docs`: Documentation and design files
+3. Open your browser and navigate to `http://localhost:3000`
 
 ## Usage
 
-1. Open the application in your browser
-2. Select a financial instrument (e.g., BTCUSD/IDRUSD)
-3. Use the chat panel to interact with the AI assistant
-4. Ask questions or give commands like:
-   - "Add a 50-day moving average"
-   - "Draw a trend line from the March low to the current price"
-   - "Create a strategy to buy when RSI is below 30"
-   - "What's the current market sentiment?"
+### Chart Navigation
 
-## Development
+- **Zoom**: Mouse wheel or pinch gesture
+- **Pan**: Click and drag
+- **Crosshair**: Hover over the chart
+- **Time Range**: Use the timeframe selector (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w, 1M)
 
-### Adding New Features
+### Adding Indicators
 
-1. Backend:
-   - Add new routes in `backend/app/routes.py`
-   - Implement services in `backend/app/services/`
+1. Click the settings icon in the chart pane
+2. Select "Add Indicator"
+3. Choose the indicator type and parameters
+4. Click "Add"
 
-2. Frontend:
-   - Add new components in `frontend/src/components/`
-   - Update services in `frontend/src/services/`
+## Troubleshooting
 
-### Testing
+### API Rate Limits
 
-- Backend: Unit tests can be added in a `/tests` directory
-- Frontend: Component tests using React Testing Library
+If you see an error message about API limits, it means you've reached the rate limit of Alpha Vantage API. Solutions:
 
-## Documentation
+1. Wait for a minute before trying again
+2. Get your own API key from Alpha Vantage (free)
+3. Consider upgrading to a premium plan if you need more API calls
 
-- [User Guide](docs/user_guide.md): Learn how to use the application
-- [Developer Guide](docs/developer_guide.md): Learn how to extend and modify the application
+### No Data Available
+
+If you see "No data available for this symbol and timeframe", it could mean:
+
+1. The symbol doesn't exist or is incorrect
+2. The timeframe is not supported for this symbol
+3. Alpha Vantage doesn't have data for this symbol
+
+Try a different symbol or timeframe.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- [TradingView](https://www.tradingview.com/) for inspiration
+- [Lightweight Charts](https://github.com/tradingview/lightweight-charts) for the charting library
+- [Alpha Vantage](https://www.alphavantage.co/) for financial data API 

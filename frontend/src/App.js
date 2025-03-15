@@ -13,6 +13,7 @@ import { initSocket, sendChatMessage, disconnectSocket } from './services/socket
 import CodeEditor from './pages/tools/CodeEditor';
 
 import './App.css';
+import ChartExample from './examples/ChartExample';
 
 const AppContainer = styled.div`
   display: flex;
@@ -53,11 +54,11 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const [symbol, setSymbol] = useState('BTCUSDT');
-  const [timeframe, setTimeframe] = useState('1h');
+  const [timeframe, setTimeframe] = useState('1d');
   const [chartData, setChartData] = useState([]);
   const [chartContext, setChartContext] = useState({
     symbol: 'BTCUSDT',
-    timeframe: '1h',
+    timeframe: '1d',
     indicators: []
   });
   const [activeView, setActiveView] = useState('CHART');

@@ -209,14 +209,14 @@ const Header = ({ symbol, timeframe, onTimeframeChange, onSymbolChange }) => {
   const profileRef = useRef(null);
   
   const timeframes = [
-    { label: '1m', value: '1min' },
-    { label: '5m', value: '5min' },
-    { label: '15m', value: '15min' },
-    { label: '30m', value: '30min' },
-    { label: '1h', value: '1H' },
-    { label: '4h', value: '4H' },
-    { label: '1D', value: '1D' },
-    { label: '1W', value: '1W' },
+    { label: '1m', value: '1m' },
+    { label: '5m', value: '5m' },
+    { label: '15m', value: '15m' },
+    { label: '30m', value: '30m' },
+    { label: '1h', value: '1h' },
+    { label: '4h', value: '4h' },
+    { label: '1D', value: '1d' },
+    { label: '1W', value: '1w' },
     { label: '1M', value: '1M' }
   ];
   

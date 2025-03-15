@@ -2,37 +2,43 @@ from flask import request, jsonify
 from app import app, socketio
 from app.services import financial_data_service
 from app.services.unified_ai_service import unified_ai_service
+from app.routes.financial_data_routes import financial_data_bp
 import asyncio
 import json
 import time
 import traceback
+
+# Register blueprints
+app.register_blueprint(financial_data_bp)
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
     return jsonify({"status": "ok"})
 
-@app.route('/api/financial-data', methods=['GET'])
-def get_financial_data():
-    """Get financial data for a specific symbol and timeframe"""
-    symbol = request.args.get('symbol', 'BTCUSDT')
-    timeframe = request.args.get('timeframe', '1m')
-    limit = request.args.get('limit', 100, type=int)
-    
-    try:
-        # For BTCUSDT, use our JSON data files
-        if symbol.upper() == 'BTCUSDT':
-            data = financial_data_service.get_json_data(timeframe, limit)
-            if not data.get("error"):
-                return jsonify(data)
-        
-        # For other symbols, use regular financial data
-        data = financial_data_service.get_financial_data(symbol, timeframe, limit)
-        return jsonify(data)
-    except Exception as e:
-        print(f"Error in get_financial_data: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+# The financial data endpoint is now handled by the financial_data_bp blueprint
+# Removing the old endpoint:
+# @app.route('/api/financial-data', methods=['GET'])
+# def get_financial_data():
+#     """Get financial data for a specific symbol and timeframe"""
+#     symbol = request.args.get('symbol', 'BTCUSDT')
+#     timeframe = request.args.get('timeframe', '1m')
+#     limit = request.args.get('limit', 100, type=int)
+#     
+#     try:
+#         # For BTCUSDT, use our JSON data files
+#         if symbol.upper() == 'BTCUSDT':
+#             data = financial_data_service.get_json_data(timeframe, limit)
+#             if not data.get("error"):
+#                 return jsonify(data)
+#         
+#         # For other symbols, use regular financial data
+#         data = financial_data_service.get_financial_data(symbol, timeframe, limit)
+#         return jsonify(data)
+#     except Exception as e:
+#         print(f"Error in get_financial_data: {str(e)}")
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/chat', methods=['POST'])
 def process_chat():

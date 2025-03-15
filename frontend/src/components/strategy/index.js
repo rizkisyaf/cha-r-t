@@ -1,5 +1,8 @@
 import React from 'react';
 import styled from 'styled-components';
+import StrategyBuilder from './StrategyBuilder';
+import BacktestResults from './BacktestResults';
+import StrategyOptimizer from './StrategyOptimizer';
 
 const Container = styled.div`
   padding: 16px;
@@ -17,12 +20,7 @@ const Message = styled.p`
   font-size: 14px;
 `;
 
-export const StrategyBuilder = ({ state, onAction }) => (
-  <Container>
-    <Title>Strategy Builder</Title>
-    <Message>Build and customize your trading strategies</Message>
-  </Container>
-);
+export { StrategyBuilder, BacktestResults, StrategyOptimizer };
 
 export const StrategyRunner = ({ state, onAction }) => (
   <Container>

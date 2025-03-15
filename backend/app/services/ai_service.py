@@ -137,7 +137,7 @@ AVAILABLE_FUNCTIONS = {
                 "indicators": {
                     "type": "object",
                     "description": "Dictionary of calculated technical indicators with their values",
-                    "additionalProperties": true
+                    "additionalProperties": True
                 }
             },
             "required": ["patterns", "indicators"]
