@@ -301,3 +301,39 @@
 2025-03-15 16:31:06,076 - werkzeug - INFO -  * Restarting with stat
 2025-03-15 16:31:06,431 - werkzeug - WARNING -  * Debugger is active!
 2025-03-15 16:31:06,438 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:02:38,018 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:02:38,374 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:02:38,381 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:12:07,446 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:12:07,825 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:12:07,838 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:14:50,901 - werkzeug - INFO -  * Detected change in '/Users/rizkisyafii/cha(r)t/backend/app/routes/financial_data_routes.py', reloading
+2025-03-15 18:14:50,993 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:14:51,578 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:14:51,584 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:15:12,315 - werkzeug - INFO -  * Detected change in '/Users/rizkisyafii/cha(r)t/backend/app/routes/financial_data_routes.py', reloading
+2025-03-15 18:15:12,413 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:15:12,961 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:15:12,967 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:16:50,341 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:16:50,700 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:16:50,707 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:19:22,985 - werkzeug - INFO -  * Detected change in '/Users/rizkisyafii/cha(r)t/backend/app/routes/financial_data_routes.py', reloading
+2025-03-15 18:19:23,114 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:19:24,052 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:19:24,061 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:19:49,079 - werkzeug - INFO -  * Detected change in '/Users/rizkisyafii/cha(r)t/backend/app/routes/financial_data_routes.py', reloading
+2025-03-15 18:19:49,166 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:19:49,713 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:19:49,719 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:19:51,827 - werkzeug - INFO -  * Detected change in '/Users/rizkisyafii/cha(r)t/backend/app/routes/financial_data_routes.py', reloading
+2025-03-15 18:19:51,921 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:19:52,287 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:19:52,293 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:20:04,772 - werkzeug - INFO -  * Detected change in '/Users/rizkisyafii/cha(r)t/backend/app/routes/financial_data_routes.py', reloading
+2025-03-15 18:20:04,862 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:20:05,466 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:20:05,478 - werkzeug - INFO -  * Debugger PIN: 216-712-107
+2025-03-15 18:23:35,966 - werkzeug - INFO -  * Restarting with stat
+2025-03-15 18:23:36,311 - werkzeug - WARNING -  * Debugger is active!
+2025-03-15 18:23:36,320 - werkzeug - INFO -  * Debugger PIN: 216-712-107

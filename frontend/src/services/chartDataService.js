@@ -9,9 +9,13 @@ const API_URL = process.env.REACT_APP_API_URL || '';
  * @param {string} symbol - The trading symbol (e.g., 'BTCUSDT', 'AAPL')
  * @param {string} timeframe - The timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')
  * @param {number} limit - The number of candles to fetch
+ * @param {number} timestamp - Optional timestamp to force cache bypass
+ * @param {string} randomParam - Optional random parameter to force cache bypass
+ * @param {boolean} forceBypass - Optional flag to explicitly force cache bypass
+ * @param {AbortSignal} signal - Optional abort signal for request cancellation
  * @returns {Promise<Array>} - Array of OHLCV data
  */
-export const fetchHistoricalData = async (symbol, timeframe, limit = 500) => {
+export const fetchHistoricalData = async (symbol, timeframe, limit = 500, timestamp = null, randomParam = null, forceBypass = false, signal = null) => {
   try {
     console.log(`Fetching historical data for ${symbol} on ${timeframe} timeframe, limit: ${limit}`);
     
@@ -23,11 +27,16 @@ export const fetchHistoricalData = async (symbol, timeframe, limit = 500) => {
       limit = Math.max(limit, 365);
     }
     
-    // Check if we have cached data in IndexedDB
-    const cachedData = await dbService.getChartData(symbol, timeframe, limit);
-    if (cachedData && cachedData.length > 0) {
-      console.log(`Using cached data for ${symbol} on ${timeframe} timeframe, ${cachedData.length} candles`);
-      return cachedData;
+    // Skip cache if timestamp is provided (force refresh) or forceBypass is true
+    if (!timestamp && !forceBypass) {
+      // Check if we have cached data in IndexedDB
+      const cachedData = await dbService.getChartData(symbol, timeframe, limit);
+      if (cachedData && cachedData.length > 0) {
+        console.log(`Using cached data for ${symbol} on ${timeframe} timeframe, ${cachedData.length} candles`);
+        return cachedData;
+      }
+    } else {
+      console.log(`Cache bypass requested for ${symbol} on ${timeframe} timeframe`);
     }
     
     // For crypto symbols, try direct Binance API proxy first
@@ -39,19 +48,37 @@ export const fetchHistoricalData = async (symbol, timeframe, limit = 500) => {
         // Map timeframe to Binance interval
         const interval = mapTimeframeToBinanceInterval(timeframe);
         
-        console.log(`Making request to ${API_URL}/api/proxy/binance/klines with params:`, {
+        // Add a unique cache-busting parameter if timestamp is provided
+        const params = {
           symbol: binanceSymbol,
           interval,
           limit
-        });
+        };
         
-        const response = await axios.get(`${API_URL}/api/proxy/binance/klines`, {
-          params: {
-            symbol: binanceSymbol,
-            interval,
-            limit
-          }
-        });
+        if (timestamp) {
+          params._ = timestamp;
+          console.log(`Adding timestamp ${timestamp} to force cache bypass`);
+        }
+        
+        if (randomParam) {
+          params.random = randomParam;
+          console.log(`Adding random parameter ${randomParam} to force cache bypass`);
+        }
+        
+        if (forceBypass) {
+          params.force_bypass = true;
+          console.log(`Adding force_bypass=true to explicitly force cache bypass`);
+        }
+        
+        console.log(`Making request to ${API_URL}/api/proxy/binance/klines with params:`, params);
+        
+        // Create request config with abort signal if provided
+        const requestConfig = { params };
+        if (signal) {
+          requestConfig.signal = signal;
+        }
+        
+        const response = await axios.get(`${API_URL}/api/proxy/binance/klines`, requestConfig);
         
         if (response.data && response.data.success && response.data.data) {
           console.log(`Successfully fetched data from Binance API proxy, got ${response.data.data.length} candles`);
@@ -115,13 +142,36 @@ export const fetchHistoricalData = async (symbol, timeframe, limit = 500) => {
     if (API_URL) {
       try {
         console.log(`Trying backend API at ${API_URL}/api/financial-data`);
-        const response = await axios.get(`${API_URL}/api/financial-data`, {
-          params: {
-            symbol,
-            timeframe,
-            limit
-          }
-        });
+        
+        // Add a unique cache-busting parameter if timestamp is provided
+        const params = {
+          symbol,
+          timeframe,
+          limit
+        };
+        
+        if (timestamp) {
+          params._ = timestamp;
+          console.log(`Adding timestamp ${timestamp} to force cache bypass for backend API`);
+        }
+        
+        if (randomParam) {
+          params.random = randomParam;
+          console.log(`Adding random parameter ${randomParam} to force cache bypass for backend API`);
+        }
+        
+        if (forceBypass) {
+          params.force_bypass = true;
+          console.log(`Adding force_bypass=true to explicitly force cache bypass for backend API`);
+        }
+        
+        // Create request config with abort signal if provided
+        const requestConfig = { params };
+        if (signal) {
+          requestConfig.signal = signal;
+        }
+        
+        const response = await axios.get(`${API_URL}/api/financial-data`, requestConfig);
         
         if (response.data && response.data.success && response.data.data) {
           console.log(`Successfully fetched data from backend API, got ${response.data.data.length} candles`);

@@ -138,6 +138,11 @@ def proxy_binance_klines():
         interval = request.args.get('interval', '1d')
         limit = request.args.get('limit', '100')
         
+        # Check for cache bypass parameters
+        timestamp = request.args.get('_')
+        random_param = request.args.get('random')
+        force_bypass = request.args.get('force_bypass', 'false').lower() == 'true'
+        
         # Create a cache key
         cache_key = f"binance_proxy_{symbol}_{interval}_{limit}"
         
@@ -146,10 +151,26 @@ def proxy_binance_klines():
         if interval in ['1d', '3d', '1w', '1M']:
             cache_duration = BINANCE_PROXY_CACHE_DURATION_LONG
         
+        # Check if we should bypass cache
+        should_bypass_cache = force_bypass
+        
         # Check cache first
-        if cache_key in binance_proxy_cache and time.time() - binance_proxy_cache_expiry.get(cache_key, 0) < cache_duration:
+        cache_valid = (
+            cache_key in binance_proxy_cache and 
+            cache_key in binance_proxy_cache_expiry and
+            time.time() - binance_proxy_cache_expiry.get(cache_key, 0) < cache_duration
+        )
+        
+        if cache_valid and not should_bypass_cache:
             print(f"Using cached data for Binance proxy: {symbol} on {interval} timeframe with limit {limit}")
+            print(f"Cache age: {time.time() - binance_proxy_cache_expiry.get(cache_key, 0)} seconds")
             return jsonify(binance_proxy_cache[cache_key])
+        
+        # If we're here, we need to fetch fresh data
+        if not cache_valid:
+            print(f"Cache invalid or expired for {symbol} on {interval} timeframe")
+        elif should_bypass_cache:
+            print(f"Bypassing cache for {symbol} on {interval} timeframe due to force_bypass={force_bypass}")
         
         # Build the Binance API URL
         url = "https://api.binance.com/api/v3/klines"
@@ -222,6 +243,8 @@ def proxy_binance_klines():
             binance_proxy_cache[cache_key] = response_data
             binance_proxy_cache_expiry[cache_key] = time.time()
             
+            print(f"Updated cache for {symbol} on {interval} timeframe with {len(formatted_data)} candles")
+            
             return jsonify(response_data)
         except Exception as e:
             print(f"Error in proxy_binance_klines: {str(e)}")
@@ -286,4 +309,116 @@ def get_binance_websocket_info():
             'error': str(e),
             'symbol': request.args.get('symbol', 'BTCUSDT').lower(),
             'stream_type': request.args.get('stream_type', 'kline_1m')
+        }), 500
+
+@financial_data_bp.route('/api/clear-cache', methods=['GET'])
+def clear_cache_route():
+    """
+    Clear the cache for a specific symbol and timeframe or the entire cache
+    
+    Query parameters:
+        symbol (str, optional): The trading symbol (e.g., 'BTCUSDT', 'AAPL')
+        timeframe (str, optional): The timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')
+        clear_all (bool, optional): Whether to clear the entire cache
+        
+    Returns:
+        JSON: Success message
+    """
+    try:
+        symbol = request.args.get('symbol')
+        timeframe = request.args.get('timeframe')
+        clear_all = request.args.get('clear_all', 'false').lower() == 'true'
+        
+        # Import the data_cache and cache_expiry from the financial_data_service
+        from app.services.financial_data_service import data_cache, cache_expiry
+        
+        cleared_keys = []
+        
+        if clear_all:
+            # Clear all caches
+            binance_proxy_cache.clear()
+            binance_proxy_cache_expiry.clear()
+            data_cache.clear()
+            cache_expiry.clear()
+            print("Cleared all caches")
+            return jsonify({
+                'success': True,
+                'message': 'All caches cleared successfully'
+            })
+        
+        # Clear specific caches based on symbol and timeframe
+        if symbol:
+            symbol = symbol.upper()
+            
+            # Clear from binance_proxy_cache by forcing expiration
+            for key in list(binance_proxy_cache.keys()):
+                if symbol in key:
+                    if timeframe:
+                        # If timeframe is specified, only clear matching timeframe
+                        if timeframe in key:
+                            # Force expiration by setting timestamp to 0
+                            binance_proxy_cache_expiry[key] = 0
+                            cleared_keys.append(key)
+                    else:
+                        # If no timeframe, clear all for this symbol
+                        binance_proxy_cache_expiry[key] = 0
+                        cleared_keys.append(key)
+            
+            # Clear from data_cache by forcing expiration
+            for key in list(data_cache.keys()):
+                if symbol in key:
+                    if timeframe:
+                        # If timeframe is specified, only clear matching timeframe
+                        if timeframe in key:
+                            # Force expiration by setting timestamp to 0
+                            cache_expiry[key] = 0
+                            cleared_keys.append(key)
+                    else:
+                        # If no timeframe, clear all for this symbol
+                        cache_expiry[key] = 0
+                        cleared_keys.append(key)
+            
+            print(f"Cleared cache for symbol {symbol}{' and timeframe ' + timeframe if timeframe else ''}")
+            return jsonify({
+                'success': True,
+                'message': f"Cache cleared for symbol {symbol}{' and timeframe ' + timeframe if timeframe else ''}",
+                'cleared_keys': cleared_keys
+            })
+        
+        # If no symbol specified but timeframe is, clear all for that timeframe
+        if timeframe and not symbol:
+            # Clear from binance_proxy_cache by forcing expiration
+            for key in list(binance_proxy_cache.keys()):
+                if timeframe in key:
+                    # Force expiration by setting timestamp to 0
+                    binance_proxy_cache_expiry[key] = 0
+                    cleared_keys.append(key)
+            
+            # Clear from data_cache by forcing expiration
+            for key in list(data_cache.keys()):
+                if timeframe in key:
+                    # Force expiration by setting timestamp to 0
+                    cache_expiry[key] = 0
+                    cleared_keys.append(key)
+            
+            print(f"Cleared cache for timeframe {timeframe}")
+            return jsonify({
+                'success': True,
+                'message': f"Cache cleared for timeframe {timeframe}",
+                'cleared_keys': cleared_keys
+            })
+        
+        # If neither symbol nor timeframe specified, return error
+        if not symbol and not timeframe and not clear_all:
+            return jsonify({
+                'success': False,
+                'error': 'Please specify symbol, timeframe, or set clear_all=true'
+            }), 400
+        
+    except Exception as e:
+        print(f"Error in clear_cache_route: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500 
